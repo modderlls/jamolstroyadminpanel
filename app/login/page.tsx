@@ -17,9 +17,12 @@ export default function AdminLoginPage() {
   const [loginStatus, setLoginStatus] = useState<"pending" | "approved" | "rejected" | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const isCheckingRef = useRef(false)
+  const hasRedirectedRef = useRef(false)
 
   useEffect(() => {
-    if (user && !loading) {
+    // Only redirect if user exists and we haven't redirected yet
+    if (user && !loading && !hasRedirectedRef.current) {
+      hasRedirectedRef.current = true
       router.push("/")
     }
   }, [user, loading, router])
@@ -42,10 +45,14 @@ export default function AdminLoginPage() {
               clearInterval(intervalRef.current)
               intervalRef.current = null
             }
+            isCheckingRef.current = false
 
             // Delay redirect to show success message
             setTimeout(() => {
-              window.location.href = "/"
+              if (!hasRedirectedRef.current) {
+                hasRedirectedRef.current = true
+                window.location.href = "/"
+              }
             }, 1500)
           } else if (data.status === "rejected") {
             setLoginStatus("rejected")
@@ -53,18 +60,20 @@ export default function AdminLoginPage() {
               clearInterval(intervalRef.current)
               intervalRef.current = null
             }
+            isCheckingRef.current = false
           } else if (data.status === "unauthorized") {
             setLoginStatus("rejected")
             if (intervalRef.current) {
               clearInterval(intervalRef.current)
               intervalRef.current = null
             }
+            isCheckingRef.current = false
             alert("Admin huquqi talab qilinadi!")
           }
         } catch (error) {
           console.error("Admin login status check error:", error)
         }
-      }, 3000) // Increased interval to 3 seconds
+      }, 3000)
     }
 
     return () => {
@@ -75,6 +84,17 @@ export default function AdminLoginPage() {
       isCheckingRef.current = false
     }
   }, [tempToken, loginStatus])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      isCheckingRef.current = false
+    }
+  }, [])
 
   const handleTelegramLogin = async () => {
     try {
@@ -124,6 +144,18 @@ export default function AdminLoginPage() {
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-foreground" />
           <p className="text-muted-foreground">Yuklanmoqda...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render login form if user is already logged in
+  if (user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-foreground" />
+          <p className="text-muted-foreground">Yo'naltirilmoqda...</p>
         </div>
       </div>
     )

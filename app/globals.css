@@ -2,10 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
-}
-
 @layer utilities {
   .text-balance {
     text-wrap: balance;
@@ -48,7 +44,6 @@ body {
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
-
   .dark {
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
@@ -94,152 +89,65 @@ body {
   }
 }
 
-/* Custom animations */
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
+/* ModderSheet Styles */
+.modder-sheet-container {
+  height: calc(100vh - 400px);
+  min-height: 600px;
+  max-height: 800px;
+}
+
+.modder-sheet-content {
+  height: 100%;
+  overflow: auto;
+  border-radius: 12px;
+}
+
+.modder-sheet-content::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.modder-sheet-content::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+
+.modder-sheet-content::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+.modder-sheet-content::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Cell selection styles */
+.modder-sheet-content table td {
+  position: relative;
+  user-select: none;
+}
+
+.modder-sheet-content table td.selected {
+  background-color: hsl(var(--primary) / 0.1);
+  border: 2px solid hsl(var(--primary));
+}
+
+/* Boolean cell styles */
+.boolean-cell {
+  min-width: 80px;
+}
+
+/* Responsive table */
+@media (max-width: 768px) {
+  .modder-sheet-container {
+    height: calc(100vh - 300px);
+    min-height: 400px;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  .modder-sheet-content table th,
+  .modder-sheet-content table td {
+    min-width: 100px;
+    font-size: 12px;
+    padding: 8px;
   }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-/* Product grid */
-.product-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
-}
-
-@media (min-width: 768px) {
-  .product-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (min-width: 1024px) {
-  .product-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-@media (min-width: 1280px) {
-  .product-grid {
-    grid-template-columns: repeat(5, 1fr);
-  }
-}
-
-/* Hide scrollbar */
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-
-/* iOS style button */
-.ios-button {
-  @apply active:scale-95 transition-transform duration-150;
-}
-
-/* Safe area for mobile */
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-/* Line clamp utilities */
-.line-clamp-1 {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-}
-
-.line-clamp-2 {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.line-clamp-3 {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-}
-
-/* Custom shadows */
-.shadow-clean {
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-}
-
-.shadow-clean-lg {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
-
-/* iOS style cards */
-.ios-card {
-  @apply bg-card border border-border rounded-xl shadow-clean backdrop-blur-sm;
-}
-
-/* Focus styles */
-.focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2;
-}
-
-/* Button hover effects */
-.btn-hover {
-  @apply hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200;
-}
-
-/* Card hover effects */
-.card-hover {
-  @apply hover:shadow-md hover:-translate-y-1 transition-all duration-300;
 }

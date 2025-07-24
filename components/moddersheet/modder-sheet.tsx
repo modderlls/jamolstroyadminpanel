@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,9 +24,11 @@ import {
   RefreshCw,
   Settings,
   Database,
-  FileText,
   Upload,
   Download,
+  Undo,
+  Redo,
+  MousePointer,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import {
@@ -47,6 +49,100 @@ interface ModderSheetProps {
   onRefresh?: () => void
 }
 
+// Transliteration maps
+const cyrillicToLatin: { [key: string]: string } = {
+  а: "a",
+  б: "b",
+  в: "v",
+  г: "g",
+  д: "d",
+  е: "e",
+  ё: "yo",
+  ж: "j",
+  з: "z",
+  и: "i",
+  й: "y",
+  к: "k",
+  л: "l",
+  м: "m",
+  н: "n",
+  о: "o",
+  п: "p",
+  р: "r",
+  с: "s",
+  т: "t",
+  у: "u",
+  ф: "f",
+  х: "x",
+  ц: "ts",
+  ч: "ch",
+  ш: "sh",
+  щ: "sch",
+  ъ: "",
+  ы: "i",
+  ь: "",
+  э: "e",
+  ю: "yu",
+  я: "ya",
+  ў: "o",
+  қ: "q",
+  ғ: "g",
+  ҳ: "h",
+}
+
+const latinToCyrillic: { [key: string]: string } = {
+  a: "а",
+  b: "б",
+  v: "в",
+  g: "г",
+  d: "д",
+  e: "е",
+  yo: "ё",
+  j: "ж",
+  z: "з",
+  i: "и",
+  y: "й",
+  k: "к",
+  l: "л",
+  m: "м",
+  n: "н",
+  o: "о",
+  p: "п",
+  r: "р",
+  s: "с",
+  t: "т",
+  u: "у",
+  f: "ф",
+  x: "х",
+  ts: "ц",
+  ch: "ч",
+  sh: "ш",
+  sch: "щ",
+  yu: "ю",
+  ya: "я",
+  q: "қ",
+  h: "ҳ",
+}
+
+function transliterate(text: string, toCyrillic = false): string {
+  const map = toCyrillic ? latinToCyrillic : cyrillicToLatin
+  let result = text.toLowerCase()
+
+  // Handle multi-character mappings first
+  const multiChar = toCyrillic ? ["yo", "yu", "ya", "ts", "ch", "sh", "sch"] : ["ё", "ю", "я", "ц", "ч", "ш", "щ"]
+  multiChar.forEach((char) => {
+    if (map[char]) {
+      result = result.replace(new RegExp(char, "g"), map[char])
+    }
+  })
+
+  // Handle single characters
+  return result
+    .split("")
+    .map((char) => map[char] || char)
+    .join("")
+}
+
 export function ModderSheet({ data, onDataChange, tableName, categories = [], onRefresh }: ModderSheetProps) {
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
@@ -55,20 +151,103 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
   const [editedData, setEditedData] = useState(data)
   const [hasChanges, setHasChanges] = useState(false)
   const [selectedRows, setSelectedRows] = useState<number[]>([])
+  const [selectedCells, setSelectedCells] = useState<{ row: number; col: string }[]>([])
   const [sortColumn, setSortColumn] = useState<string>("")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [hiddenColumns, setHiddenColumns] = useState<string[]>([])
+  const [history, setHistory] = useState<any[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [isSelecting, setIsSelecting] = useState(false)
+  const [selectionStart, setSelectionStart] = useState<{ row: number; col: string } | null>(null)
+  const [showSearch, setShowSearch] = useState(false)
+
+  const tableRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setEditedData(data)
+    // Add to history
+    if (data.length > 0) {
+      setHistory([data])
+      setHistoryIndex(0)
+    }
   }, [data])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key) {
+          case "s":
+            e.preventDefault()
+            if (hasChanges) {
+              handleSave()
+            }
+            break
+          case "z":
+            e.preventDefault()
+            if (!e.shiftKey) {
+              handleUndo()
+            }
+            break
+          case "y":
+            e.preventDefault()
+            handleRedo()
+            break
+          case "f":
+            e.preventDefault()
+            setShowSearch(true)
+            setTimeout(() => searchInputRef.current?.focus(), 100)
+            break
+        }
+      }
+
+      if (e.key === "Escape") {
+        setEditingCell(null)
+        setShowSearch(false)
+        setSelectedCells([])
+        setSelectedRows([])
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [hasChanges])
+
+  const addToHistory = useCallback(
+    (newData: any[]) => {
+      const newHistory = history.slice(0, historyIndex + 1)
+      newHistory.push(JSON.parse(JSON.stringify(newData)))
+      setHistory(newHistory)
+      setHistoryIndex(newHistory.length - 1)
+    },
+    [history, historyIndex],
+  )
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const prevData = history[historyIndex - 1]
+      setEditedData(prevData)
+      setHistoryIndex(historyIndex - 1)
+      setHasChanges(true)
+    }
+  }
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const nextData = history[historyIndex + 1]
+      setEditedData(nextData)
+      setHistoryIndex(historyIndex + 1)
+      setHasChanges(true)
+    }
+  }
 
   // Define visible columns based on table
   const getVisibleColumns = () => {
     if (tableName === "products") {
       return [
         { key: "images", label: "Rasm", type: "image" },
-        { key: "name_uz", label: "Nomi (UZ)", type: "text" },
+        { key: "name_uz", label: "Nomi", type: "text" },
         { key: "price", label: "Narxi", type: "number" },
         { key: "unit", label: "O'lchov", type: "select", options: ["dona", "kg", "m", "m2", "m3", "litr"] },
         { key: "stock_quantity", label: "Miqdor", type: "number" },
@@ -98,12 +277,11 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
       ]
     } else if (tableName === "orders") {
       return [
-        { key: "order_number", label: "Raqam", type: "text" },
         { key: "customer_name", label: "Mijoz", type: "text" },
         { key: "customer_phone", label: "Telefon", type: "text" },
         {
           key: "status",
-          label: "Holat",
+          label: "Buyurtma holati",
           type: "select",
           options: [
             { value: "pending", label: "Kutilmoqda" },
@@ -114,10 +292,8 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
             { value: "cancelled", label: "Bekor qilingan" },
           ],
         },
-        { key: "total_amount", label: "Summa", type: "number" },
         { key: "is_payed", label: "To'langan", type: "boolean" },
         { key: "is_agree", label: "Kelishilgan", type: "boolean" },
-        { key: "is_claimed", label: "Qabul", type: "boolean" },
         { key: "is_borrowed", label: "Qarzdor", type: "boolean" },
         { key: "borrowed_period", label: "Qarz muddati", type: "number" },
         { key: "delivery_address", label: "Manzil", type: "text" },
@@ -137,8 +313,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
       ]
     } else if (tableName === "categories") {
       return [
-        { key: "name_uz", label: "Nomi (UZ)", type: "text" },
-        { key: "name_ru", label: "Nomi (RU)", type: "text" },
+        { key: "name_uz", label: "Nomi", type: "text" },
         {
           key: "parent_id",
           label: "Ota kategoriya",
@@ -155,9 +330,19 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
 
   const visibleColumns = getVisibleColumns().filter((col) => !hiddenColumns.includes(col.key))
 
-  const filteredData = editedData.filter((item) =>
-    Object.values(item).some((value) => String(value).toLowerCase().includes(searchQuery.toLowerCase())),
-  )
+  // Enhanced search with transliteration
+  const filteredData = editedData.filter((item) => {
+    if (!searchQuery) return true
+
+    const searchLower = searchQuery.toLowerCase()
+    const searchCyrillic = transliterate(searchQuery, true)
+    const searchLatin = transliterate(searchQuery, false)
+
+    return Object.values(item).some((value) => {
+      const valueStr = String(value).toLowerCase()
+      return valueStr.includes(searchLower) || valueStr.includes(searchCyrillic) || valueStr.includes(searchLatin)
+    })
+  })
 
   const sortedData = [...filteredData].sort((a, b) => {
     if (!sortColumn) return 0
@@ -190,6 +375,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
 
     newData[actualIndex] = { ...newData[actualIndex], [columnKey]: convertedValue }
     setEditedData(newData)
+    addToHistory(newData)
     setHasChanges(true)
     setEditingCell(null)
   }
@@ -264,6 +450,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
     })
 
     setEditedData(newData)
+    addToHistory(newData)
     setHasChanges(true)
     setReplaceQuery("")
     setReplaceWith("")
@@ -296,6 +483,59 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
     }
   }
 
+  // Excel-like cell selection
+  const handleCellMouseDown = (rowIndex: number, columnKey: string, e: React.MouseEvent) => {
+    if (e.shiftKey && selectionStart) {
+      // Range selection
+      const startRow = Math.min(selectionStart.row, rowIndex)
+      const endRow = Math.max(selectionStart.row, rowIndex)
+      const startColIndex = visibleColumns.findIndex((col) => col.key === selectionStart.col)
+      const endColIndex = visibleColumns.findIndex((col) => col.key === columnKey)
+      const startCol = Math.min(startColIndex, endColIndex)
+      const endCol = Math.max(startColIndex, endColIndex)
+
+      const newSelection: { row: number; col: string }[] = []
+      for (let row = startRow; row <= endRow; row++) {
+        for (let col = startCol; col <= endCol; col++) {
+          newSelection.push({ row, col: visibleColumns[col].key })
+        }
+      }
+      setSelectedCells(newSelection)
+    } else {
+      setSelectionStart({ row: rowIndex, col: columnKey })
+      setSelectedCells([{ row: rowIndex, col: columnKey }])
+      setIsSelecting(true)
+    }
+  }
+
+  const handleCellMouseEnter = (rowIndex: number, columnKey: string) => {
+    if (isSelecting && selectionStart) {
+      const startRow = Math.min(selectionStart.row, rowIndex)
+      const endRow = Math.max(selectionStart.row, rowIndex)
+      const startColIndex = visibleColumns.findIndex((col) => col.key === selectionStart.col)
+      const endColIndex = visibleColumns.findIndex((col) => col.key === columnKey)
+      const startCol = Math.min(startColIndex, endColIndex)
+      const endCol = Math.max(startColIndex, endColIndex)
+
+      const newSelection: { row: number; col: string }[] = []
+      for (let row = startRow; row <= endRow; row++) {
+        for (let col = startCol; col <= endCol; col++) {
+          newSelection.push({ row, col: visibleColumns[col].key })
+        }
+      }
+      setSelectedCells(newSelection)
+    }
+  }
+
+  const handleMouseUp = () => {
+    setIsSelecting(false)
+  }
+
+  useEffect(() => {
+    document.addEventListener("mouseup", handleMouseUp)
+    return () => document.removeEventListener("mouseup", handleMouseUp)
+  }, [])
+
   const handleBulkDelete = async () => {
     if (selectedRows.length === 0) return
 
@@ -309,6 +549,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
 
         const newData = editedData.filter((item) => !idsToDelete.includes(item.id))
         setEditedData(newData)
+        addToHistory(newData)
         onDataChange(newData)
         setSelectedRows([])
 
@@ -329,28 +570,49 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
       updated_at: new Date().toISOString(),
     }
 
-    // Initialize with default values
-    visibleColumns.forEach((col) => {
-      if (col.type === "boolean") {
-        newRow[col.key] = false
-      } else if (col.type === "number") {
-        newRow[col.key] = 0
-      } else if (col.type === "image") {
-        newRow[col.key] = []
-      } else {
-        newRow[col.key] = ""
-      }
-    })
+    // Initialize with default values based on table
+    if (tableName === "orders") {
+      newRow.order_number = `ORD-${Date.now()}`
+      newRow.customer_name = ""
+      newRow.customer_phone = ""
+      newRow.status = "pending"
+      newRow.is_payed = false
+      newRow.is_agree = false
+      newRow.is_borrowed = false
+      newRow.borrowed_period = 0
+      newRow.delivery_address = ""
+      newRow.total_amount = 0
+      newRow.subtotal = 0
+      newRow.delivery_fee = 0
+    } else {
+      // Initialize with default values for other tables
+      visibleColumns.forEach((col) => {
+        if (col.type === "boolean") {
+          newRow[col.key] = false
+        } else if (col.type === "number") {
+          newRow[col.key] = 0
+        } else if (col.type === "image") {
+          newRow[col.key] = []
+        } else {
+          newRow[col.key] = ""
+        }
+      })
+    }
 
-    setEditedData((prev) => [...prev, newRow])
+    const newData = [...editedData, newRow]
+    setEditedData(newData)
+    addToHistory(newData)
     setHasChanges(true)
   }
 
   // Excel Export Functions
-  const exportToExcel = () => {
+  const exportToExcel = (selectedOnly = false) => {
     try {
+      const dataToExport =
+        selectedOnly && selectedRows.length > 0 ? selectedRows.map((index) => sortedData[index]) : sortedData
+
       // Prepare data for Excel
-      const excelData = sortedData.map((item) => {
+      const excelData = dataToExport.map((item) => {
         const row: any = {}
         visibleColumns.forEach((col) => {
           const value = item[col.key]
@@ -395,7 +657,8 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
       XLSX.utils.book_append_sheet(wb, ws, tableName)
 
       // Save file
-      XLSX.writeFile(wb, `${tableName}_export_${new Date().toISOString().split("T")[0]}.xlsx`)
+      const suffix = selectedOnly ? "_selected" : ""
+      XLSX.writeFile(wb, `${tableName}_export${suffix}_${new Date().toISOString().split("T")[0]}.xlsx`)
     } catch (error) {
       console.error("Error exporting to Excel:", error)
       alert("Excel eksport qilishda xatolik yuz berdi")
@@ -451,7 +714,9 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
         })
 
         // Add imported data to existing data
-        setEditedData((prev) => [...prev, ...processedData])
+        const newData = [...editedData, ...processedData]
+        setEditedData(newData)
+        addToHistory(newData)
         setHasChanges(true)
 
         alert(`${processedData.length} ta yozuv import qilindi`)
@@ -466,97 +731,10 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
     reader.readAsArrayBuffer(file)
   }
 
-  const exportToMSHT = () => {
-    try {
-      // Create advanced MSHT format with styling
-      const exportData = {
-        meta: {
-          version: "3.0",
-          exported: new Date().toISOString(),
-          source: "JamolStroy Admin Panel",
-          table: tableName,
-          rows: sortedData.length,
-          columns: visibleColumns.length,
-        },
-        schema: {
-          columns: visibleColumns.map((col) => ({
-            key: col.key,
-            label: col.label,
-            type: col.type,
-            options: col.options || null,
-          })),
-        },
-        data: {
-          rows: sortedData.map((item, index) => ({
-            id: item.id,
-            index: index + 1,
-            cells: visibleColumns.map((col) => {
-              const value = item[col.key]
-              let displayValue = value
-              let style = {
-                fontFamily: "Arial",
-                fontSize: 12,
-                color: "#000000",
-                backgroundColor: "#ffffff",
-                fontWeight: "normal",
-              }
-
-              // Apply conditional styling
-              if (col.type === "boolean") {
-                displayValue = value ? "Ha" : "Yo'q"
-                style.color = value ? "#16a34a" : "#dc2626"
-                style.fontWeight = "bold"
-              } else if (col.type === "number") {
-                displayValue = typeof value === "number" ? value.toLocaleString() : value
-                style.fontFamily = "monospace"
-              } else if (col.key === "status") {
-                const statusStyles: any = {
-                  pending: { color: "#f59e0b", backgroundColor: "#fef3c7" },
-                  confirmed: { color: "#3b82f6", backgroundColor: "#dbeafe" },
-                  processing: { color: "#8b5cf6", backgroundColor: "#e9d5ff" },
-                  shipped: { color: "#06b6d4", backgroundColor: "#cffafe" },
-                  delivered: { color: "#10b981", backgroundColor: "#d1fae5" },
-                  cancelled: { color: "#ef4444", backgroundColor: "#fee2e2" },
-                }
-                if (statusStyles[value]) {
-                  style = { ...style, ...statusStyles[value] }
-                }
-              }
-
-              return {
-                key: col.key,
-                value: displayValue,
-                rawValue: value,
-                style: style,
-              }
-            }),
-          })),
-        },
-      }
-
-      // Encode with Base64 and custom encryption
-      const jsonString = JSON.stringify(exportData)
-      const base64Data = btoa(unescape(encodeURIComponent(jsonString)))
-
-      // Add custom header and footer
-      const finalData = `MSHT_V3_START\n${base64Data}\nMSHT_V3_END`
-
-      const blob = new Blob([finalData], {
-        type: "application/octet-stream",
-      })
-      const link = document.createElement("a")
-      link.href = URL.createObjectURL(blob)
-      link.download = `${tableName}_advanced_${new Date().toISOString().split("T")[0]}.msht`
-      link.click()
-    } catch (error) {
-      console.error("Error exporting to MSHT:", error)
-      alert("MSHT eksport qilishda xatolik yuz berdi")
-    }
-  }
-
   const renderCellValue = (item: any, column: any, rowIndex: number) => {
     const value = item[column.key]
     const isEditing = editingCell?.row === rowIndex && editingCell?.col === column.key
+    const isSelected = selectedCells.some((cell) => cell.row === rowIndex && cell.col === column.key)
 
     if (isEditing) {
       if (column.type === "boolean") {
@@ -636,57 +814,77 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
       )
     }
 
+    const cellClass = `p-3 cursor-pointer hover:bg-accent/50 transition-colors max-w-[200px] ${
+      isSelected ? "bg-primary/20 border-2 border-primary" : ""
+    }`
+
     if (column.type === "boolean") {
       return (
-        <Badge variant={value ? "default" : "secondary"} className="text-xs">
-          {value ? "Ha" : "Yo'q"}
-        </Badge>
+        <div className={cellClass}>
+          <Badge variant={value ? "default" : "secondary"} className="text-xs">
+            {value ? "Ha" : "Yo'q"}
+          </Badge>
+        </div>
       )
     }
 
     if (column.type === "image") {
       const images = Array.isArray(value) ? value : []
       return (
-        <div className="flex items-center gap-1">
-          {images.length > 0 ? (
-            <div className="flex -space-x-1">
-              {images.slice(0, 3).map((img: string, idx: number) => (
-                <div key={idx} className="w-6 h-6 rounded border-2 border-background overflow-hidden">
-                  <Image
-                    src={img || "/placeholder.svg"}
-                    alt=""
-                    width={24}
-                    height={24}
-                    className="object-cover w-full h-full"
-                  />
-                </div>
-              ))}
-              {images.length > 3 && (
-                <div className="w-6 h-6 rounded border-2 border-background bg-muted flex items-center justify-center text-xs">
-                  +{images.length - 3}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="w-6 h-6 rounded bg-muted flex items-center justify-center">
-              <ImageIcon className="h-3 w-3 text-muted-foreground" />
-            </div>
-          )}
+        <div className={cellClass}>
+          <div className="flex items-center gap-1">
+            {images.length > 0 ? (
+              <div className="flex -space-x-1">
+                {images.slice(0, 3).map((img: string, idx: number) => (
+                  <div key={idx} className="w-6 h-6 rounded border-2 border-background overflow-hidden">
+                    <Image
+                      src={img || "/placeholder.svg"}
+                      alt=""
+                      width={24}
+                      height={24}
+                      className="object-cover w-full h-full"
+                    />
+                  </div>
+                ))}
+                {images.length > 3 && (
+                  <div className="w-6 h-6 rounded border-2 border-background bg-muted flex items-center justify-center text-xs">
+                    +{images.length - 3}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="w-6 h-6 rounded bg-muted flex items-center justify-center">
+                <ImageIcon className="h-3 w-3 text-muted-foreground" />
+              </div>
+            )}
+          </div>
         </div>
       )
     }
 
     if (column.type === "number") {
-      return <span className="font-mono text-sm">{typeof value === "number" ? value.toLocaleString() : value}</span>
+      return (
+        <div className={cellClass}>
+          <span className="font-mono text-sm">{typeof value === "number" ? value.toLocaleString() : value}</span>
+        </div>
+      )
     }
 
     if (column.type === "select" && column.key === "category_id") {
       const category = categories.find((c) => c.id === value)
-      return <span className="text-sm">{category?.name_uz || value}</span>
+      return (
+        <div className={cellClass}>
+          <span className="text-sm">{category?.name_uz || value}</span>
+        </div>
+      )
     }
 
     if (column.type === "select" && column.key === "product_type") {
-      return <span className="text-sm">{value === "rental" ? "Ijara" : "Sotuv"}</span>
+      return (
+        <div className={cellClass}>
+          <span className="text-sm">{value === "rental" ? "Ijara" : "Sotuv"}</span>
+        </div>
+      )
     }
 
     if (column.type === "select" && column.key === "status") {
@@ -698,21 +896,31 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
         delivered: "Yetkazilgan",
         cancelled: "Bekor qilingan",
       }
-      return <span className="text-sm">{statusLabels[value] || value}</span>
+      return (
+        <div className={cellClass}>
+          <span className="text-sm">{statusLabels[value] || value}</span>
+        </div>
+      )
     }
 
     if (column.type === "datetime") {
-      return value ? (
-        <span className="text-sm">{new Date(value).toLocaleDateString("uz-UZ")}</span>
-      ) : (
-        <span className="text-sm text-muted-foreground">-</span>
+      return (
+        <div className={cellClass}>
+          {value ? (
+            <span className="text-sm">{new Date(value).toLocaleDateString("uz-UZ")}</span>
+          ) : (
+            <span className="text-sm text-muted-foreground">-</span>
+          )}
+        </div>
       )
     }
 
     return (
-      <span className="text-sm line-clamp-2" title={value}>
-        {value}
-      </span>
+      <div className={cellClass}>
+        <span className="text-sm line-clamp-2" title={value}>
+          {value}
+        </span>
+      </div>
     )
   }
 
@@ -725,6 +933,8 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
             <CardTitle className="text-lg">ModderSheet - {tableName}</CardTitle>
             <div className="flex items-center gap-2">
               <Badge variant="outline">{sortedData.length} yozuv</Badge>
+              {selectedRows.length > 0 && <Badge variant="secondary">{selectedRows.length} tanlangan</Badge>}
+              {selectedCells.length > 0 && <Badge variant="secondary">{selectedCells.length} katak</Badge>}
               {hasChanges && <Badge variant="destructive">Saqlanmagan</Badge>}
             </div>
           </div>
@@ -735,7 +945,8 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Qidirish..."
+                ref={searchInputRef}
+                placeholder="Qidirish (Kiril/Lotin)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -771,7 +982,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
             {/* Primary Actions */}
             <Button onClick={handleSave} disabled={!hasChanges} className="ios-button">
               <Save className="h-4 w-4 mr-2" />
-              Saqlash
+              Saqlash (Ctrl+S)
               {hasChanges && (
                 <Badge variant="destructive" className="ml-2 text-xs">
                   !
@@ -781,7 +992,30 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
 
             <Button onClick={addNewRow} variant="outline" className="ios-button bg-transparent">
               <Plus className="h-4 w-4 mr-2" />
-              Qator qo'shish
+              {tableName === "orders" ? "Yangi buyurtma" : "Qator qo'shish"}
+            </Button>
+
+            {/* History Actions */}
+            <Button
+              onClick={handleUndo}
+              disabled={historyIndex <= 0}
+              variant="outline"
+              size="sm"
+              className="ios-button bg-transparent"
+            >
+              <Undo className="h-4 w-4 mr-1" />
+              Bekor qilish (Ctrl+Z)
+            </Button>
+
+            <Button
+              onClick={handleRedo}
+              disabled={historyIndex >= history.length - 1}
+              variant="outline"
+              size="sm"
+              className="ios-button bg-transparent"
+            >
+              <Redo className="h-4 w-4 mr-1" />
+              Qaytarish (Ctrl+Y)
             </Button>
 
             {/* Bulk Actions */}
@@ -799,10 +1033,17 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
             )}
 
             {/* Excel Export/Import */}
-            <Button onClick={exportToExcel} variant="outline" className="ios-button bg-transparent">
+            <Button onClick={() => exportToExcel(false)} variant="outline" className="ios-button bg-transparent">
               <Download className="h-4 w-4 mr-2" />
               Excel Export
             </Button>
+
+            {selectedRows.length > 0 && (
+              <Button onClick={() => exportToExcel(true)} variant="outline" className="ios-button bg-transparent">
+                <Download className="h-4 w-4 mr-2" />
+                Tanlanganlarni Export
+              </Button>
+            )}
 
             <div className="relative">
               <input
@@ -817,11 +1058,6 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                 Excel Import
               </Button>
             </div>
-
-            <Button onClick={exportToMSHT} variant="outline" className="ios-button bg-transparent">
-              <FileText className="h-4 w-4 mr-2" />
-              MSHT Export
-            </Button>
 
             {/* Utility Actions */}
             <Button onClick={() => onRefresh?.()} variant="outline" size="sm" className="ios-button bg-transparent">
@@ -858,12 +1094,19 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setSelectedRows([])}>Tanlovni bekor qilish</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedRows([])}>Qator tanlovini bekor qilish</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedCells([])}>Katak tanlovini bekor qilish</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSortColumn("")}>Saralashni bekor qilish</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setHiddenColumns([])}>Barcha ustunlarni ko'rsatish</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          </div>
+
+          {/* Keyboard Shortcuts Info */}
+          <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2">
+            <strong>Klaviatura:</strong> Ctrl+S (Saqlash), Ctrl+Z (Bekor qilish), Ctrl+Y (Qaytarish), Ctrl+F (Qidirish),
+            Shift+Click (Oraliq tanlash)
           </div>
         </CardContent>
       </Card>
@@ -872,7 +1115,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
       <div className="modder-sheet-container">
         <Card className="ios-card h-full">
           <CardContent className="p-0 h-full">
-            <div className="modder-sheet-content">
+            <div className="modder-sheet-content" ref={tableRef}>
               <table className="w-full">
                 <thead className="sticky top-0 bg-muted/50 z-10">
                   <tr className="border-b border-border">
@@ -925,8 +1168,10 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                       {visibleColumns.map((column) => (
                         <td
                           key={column.key}
-                          className="p-3 cursor-pointer hover:bg-accent/50 transition-colors max-w-[200px]"
-                          onClick={() => setEditingCell({ row: rowIndex, col: column.key })}
+                          className="border-r border-border last:border-r-0"
+                          onMouseDown={(e) => handleCellMouseDown(rowIndex, column.key, e)}
+                          onMouseEnter={() => handleCellMouseEnter(rowIndex, column.key)}
+                          onDoubleClick={() => setEditingCell({ row: rowIndex, col: column.key })}
                         >
                           {renderCellValue(item, column, rowIndex)}
                         </td>
@@ -946,7 +1191,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                               Tahrirlash
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleSelectRow(rowIndex)}>
-                              <Copy className="h-4 w-4 mr-2" />
+                              <MousePointer className="h-4 w-4 mr-2" />
                               Tanlash
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -955,6 +1200,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                                 if (confirm("Bu yozuvni o'chirishni tasdiqlaysizmi?")) {
                                   const newData = editedData.filter((d) => d.id !== item.id)
                                   setEditedData(newData)
+                                  addToHistory(newData)
                                   setHasChanges(true)
                                 }
                               }}
@@ -978,7 +1224,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                         className="w-full h-8 text-muted-foreground hover:text-foreground ios-button"
                       >
                         <Plus className="h-4 w-4 mr-2" />
-                        Yangi qator qo'shish
+                        {tableName === "orders" ? "Yangi buyurtma qo'shish" : "Yangi qator qo'shish"}
                       </Button>
                     </td>
                   </tr>
@@ -991,7 +1237,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                   <p>Ma'lumot topilmadi</p>
                   <Button onClick={addNewRow} variant="outline" className="mt-4 ios-button bg-transparent">
                     <Plus className="h-4 w-4 mr-2" />
-                    Birinchi yozuvni qo'shish
+                    {tableName === "orders" ? "Birinchi buyurtmani qo'shish" : "Birinchi yozuvni qo'shish"}
                   </Button>
                 </div>
               )}
@@ -1004,14 +1250,15 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
       <div className="text-sm text-muted-foreground text-center space-y-2">
         <div className="flex items-center justify-center gap-4">
           <span>Jami: {sortedData.length} ta yozuv</span>
-          {selectedRows.length > 0 && <span>Tanlangan: {selectedRows.length} ta</span>}
+          {selectedRows.length > 0 && <span>Tanlangan qatorlar: {selectedRows.length} ta</span>}
+          {selectedCells.length > 0 && <span>Tanlangan kataklar: {selectedCells.length} ta</span>}
           {hasChanges && (
             <Badge variant="destructive" className="text-xs">
               Saqlanmagan o'zgarishlar bor
             </Badge>
           )}
         </div>
-        <div className="text-xs text-muted-foreground/70">ModderSheet v3.0 - JamolStroy Admin Panel</div>
+        <div className="text-xs text-muted-foreground/70">ModderSheet v4.0 - JamolStroy Admin Panel</div>
       </div>
     </div>
   )

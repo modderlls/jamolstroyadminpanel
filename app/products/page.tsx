@@ -209,11 +209,13 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="main">Asosiy</TabsTrigger>
-          <TabsTrigger value="table">Jadval</TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="flex justify-center">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="main">Asosiy</TabsTrigger>
+            <TabsTrigger value="table">Jadval</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="main">
           <div className="space-y-6">

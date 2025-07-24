@@ -241,6 +241,44 @@ export default function OrdersPage() {
     setCurrentPage(1)
   }
 
+  // Calculate analytics based on current filtered data
+  const getAnalyticsData = () => {
+    let analyticsOrders = orders
+
+    // Apply same filters as main list for analytics
+    if (statusFilter || paymentFilter || dateFilter || searchQuery) {
+      analyticsOrders = orders.filter((order) => {
+        let matches = true
+
+        if (statusFilter && order.status !== statusFilter) matches = false
+        if (paymentFilter === "paid" && !order.is_payed) matches = false
+        if (paymentFilter === "unpaid" && order.is_payed) matches = false
+        if (searchQuery) {
+          const searchLower = searchQuery.toLowerCase()
+          matches =
+            matches &&
+            (order.order_number.toLowerCase().includes(searchLower) ||
+              order.customer_name.toLowerCase().includes(searchLower) ||
+              order.customer_phone.includes(searchQuery))
+        }
+
+        return matches
+      })
+    }
+
+    // Exclude cancelled orders from total sum calculation
+    const validOrders = analyticsOrders.filter((order) => order.status !== "cancelled")
+
+    return {
+      totalOrders: analyticsOrders.length,
+      pendingOrders: analyticsOrders.filter((o) => o.status === "pending").length,
+      deliveredOrders: analyticsOrders.filter((o) => o.status === "delivered").length,
+      totalAmount: validOrders.reduce((sum, order) => sum + order.total_amount, 0),
+    }
+  }
+
+  const analytics = getAnalyticsData()
+
   if (loading) {
     return (
       <div className="p-6 space-y-6">
@@ -266,12 +304,14 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="list">Ro'yxat</TabsTrigger>
-          <TabsTrigger value="table">Jadval</TabsTrigger>
-          <TabsTrigger value="analytics">Tahlil</TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="flex justify-center">
+          <TabsList className="grid w-full max-w-md grid-cols-3">
+            <TabsTrigger value="list">Ro'yxat</TabsTrigger>
+            <TabsTrigger value="table">Jadval</TabsTrigger>
+            <TabsTrigger value="analytics">Tahlil</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="list">
           <div className="space-y-6">
@@ -597,7 +637,7 @@ export default function OrdersPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Jami buyurtmalar</p>
-                    <p className="text-2xl font-bold text-foreground">{totalCount}</p>
+                    <p className="text-2xl font-bold text-foreground">{analytics.totalOrders}</p>
                   </div>
                   <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
                     <Package className="h-6 w-6 text-primary-foreground" />
@@ -611,9 +651,7 @@ export default function OrdersPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Kutilayotgan</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {orders.filter((o) => o.status === "pending").length}
-                    </p>
+                    <p className="text-2xl font-bold text-foreground">{analytics.pendingOrders}</p>
                   </div>
                   <div className="w-12 h-12 bg-yellow-500 rounded-xl flex items-center justify-center">
                     <Clock className="h-6 w-6 text-white" />
@@ -627,9 +665,7 @@ export default function OrdersPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Yetkazilgan</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {orders.filter((o) => o.status === "delivered").length}
-                    </p>
+                    <p className="text-2xl font-bold text-foreground">{analytics.deliveredOrders}</p>
                   </div>
                   <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
                     <Check className="h-6 w-6 text-white" />
@@ -643,9 +679,8 @@ export default function OrdersPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Jami summa</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {orders.reduce((sum, order) => sum + order.total_amount, 0).toLocaleString()} so'm
-                    </p>
+                    <p className="text-2xl font-bold text-foreground">{analytics.totalAmount.toLocaleString()} so'm</p>
+                    <p className="text-xs text-muted-foreground mt-1">(Bekor qilinganlar hisobga olinmagan)</p>
                   </div>
                   <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
                     <CreditCard className="h-6 w-6 text-white" />
