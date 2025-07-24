@@ -30,6 +30,7 @@ import { supabase } from "@/lib/supabase"
 import { ModderSheet } from "@/components/moddersheet/modder-sheet"
 import { OrderViewDialog } from "@/components/orders/order-view-dialog"
 import { PaymentConfirmDialog } from "@/components/orders/payment-confirm-dialog"
+import { useRouter } from "next/navigation"
 
 interface Order {
   id: string
@@ -106,6 +107,8 @@ export default function OrdersPage() {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [paymentOrder, setPaymentOrder] = useState<Order | null>(null)
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
+
+  const router = useRouter()
 
   useEffect(() => {
     fetchOrders()
@@ -561,7 +564,15 @@ export default function OrdersPage() {
                           <Eye className="h-3 w-3 mr-1" />
                           Ko'rish
                         </Button>
-                        <Button variant="outline" size="sm" className="ios-button bg-transparent">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="ios-button bg-transparent"
+                          onClick={() => {
+                            // Navigate to edit page or open edit dialog
+                            router.push(`/orders/edit/${order.id}`)
+                          }}
+                        >
                           <Edit className="h-3 w-3 mr-1" />
                           Tahrirlash
                         </Button>

@@ -1,7 +1,7 @@
 "use client"
 
 import type * as React from "react"
-import { Home, Package, ShoppingCart, LogOut, BarChart3, Users, Settings, FolderTree } from "lucide-react"
+import { Home, Package, ShoppingCart, LogOut, BarChart3, Users, Settings, FolderTree, Calendar } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
@@ -30,6 +30,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0)
   const [debtorsCount, setDebtorsCount] = useState(0)
+  const [rentalsCount, setRentalsCount] = useState(0)
 
   useEffect(() => {
     fetchCounts()
@@ -65,6 +66,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         .eq("is_payed", false)
 
       setDebtorsCount(debtorsCount || 0)
+
+      // Fetch active rentals count
+      const { count: rentalsCount } = await supabase
+        .from("orders")
+        .select("*", { count: "exact", head: true })
+        .eq("product_type", "rental")
+        .in("status", ["confirmed", "processing", "shipped"])
+
+      setRentalsCount(rentalsCount || 0)
     } catch (error) {
       console.error("Error fetching counts:", error)
     }
@@ -89,6 +99,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         badge: pendingOrdersCount > 0 ? pendingOrdersCount : null,
       },
       {
+        title: "Arendalar",
+        url: "/rentals",
+        icon: Calendar,
+        badge: rentalsCount > 0 ? rentalsCount : null,
+      },
+      {
         title: "Qarzdorlar",
         url: "/debtors",
         icon: Users,
@@ -108,8 +124,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   return (
-    <Sidebar {...props} className="border-r border-border blur-bar">
-      <SidebarHeader className="border-b border-border/50 p-6 blur-bar">
+    <Sidebar
+      {...props}
+      className="border-r border-border/50 backdrop-blur-xl bg-background/80 supports-[backdrop-filter]:bg-background/60"
+    >
+      <SidebarHeader className="border-b border-border/30 p-6 backdrop-blur-sm bg-background/50">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
             <BarChart3 className="h-5 w-5 text-primary-foreground" />
@@ -121,7 +140,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-4 py-6">
+      <SidebarContent className="px-4 py-6 backdrop-blur-sm bg-background/30">
         <SidebarGroup>
           <SidebarGroupLabel className="text-foreground font-medium">Asosiy bo'limlar</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -131,7 +150,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === item.url}
-                    className="ios-button hover:bg-accent data-[active=true]:bg-primary data-[active=true]:text-primary-foreground relative"
+                    className="ios-button hover:bg-accent/50 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground relative backdrop-blur-sm"
                   >
                     <Link href={item.url}>
                       <item.icon className="h-4 w-4" />
@@ -146,7 +165,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-border/50 p-4 blur-bar">
+      <SidebarFooter className="border-t border-border/30 p-4 backdrop-blur-sm bg-background/50">
         <div className="flex items-center gap-3 mb-3">
           <Avatar className="h-8 w-8">
             <AvatarImage src={user?.avatar_url || "/placeholder.svg"} />
@@ -166,7 +185,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           variant="outline"
           size="sm"
           onClick={logout}
-          className="w-full ios-button hover:bg-destructive hover:text-destructive-foreground bg-transparent"
+          className="w-full ios-button hover:bg-destructive hover:text-destructive-foreground bg-transparent backdrop-blur-sm"
         >
           <LogOut className="h-4 w-4 mr-2" />
           Chiqish

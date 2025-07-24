@@ -2,33 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-}
-
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 9% 10%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 10% 3.9%;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
@@ -44,26 +38,27 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+
   .dark {
-    --background: 0 0% 3.9%;
+    --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
+    --card: 240 10% 3.9%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
+    --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
     --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -71,8 +66,8 @@
     --chart-5: 340 75% 55%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary: 0 0% 98%;
+    --sidebar-primary-foreground: 240 5.9% 10%;
     --sidebar-accent: 240 3.7% 15.9%;
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
@@ -89,65 +84,176 @@
   }
 }
 
-/* ModderSheet Styles */
+/* iOS-style components */
+.ios-card {
+  @apply rounded-2xl border border-border/50 shadow-sm backdrop-blur-sm bg-card/80;
+}
+
+.ios-button {
+  @apply rounded-xl transition-all duration-200 active:scale-95;
+}
+
+.notification-badge {
+  @apply absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center;
+}
+
+/* ModderSheet specific styles */
 .modder-sheet-container {
-  height: calc(100vh - 400px);
-  min-height: 600px;
-  max-height: 800px;
+  @apply h-[600px] w-full overflow-hidden rounded-xl border border-border;
 }
 
 .modder-sheet-content {
-  height: 100%;
-  overflow: auto;
-  border-radius: 12px;
+  @apply h-full w-full overflow-auto;
 }
 
 .modder-sheet-content::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  @apply h-2 w-2;
 }
 
 .modder-sheet-content::-webkit-scrollbar-track {
-  background: hsl(var(--muted));
-  border-radius: 4px;
+  @apply bg-muted/30 rounded;
 }
 
 .modder-sheet-content::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 4px;
+  @apply bg-muted-foreground/30 rounded hover:bg-muted-foreground/50;
 }
 
-.modder-sheet-content::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+/* Sticky columns styling */
+.modder-sheet-content table th.sticky,
+.modder-sheet-content table td.sticky {
+  @apply bg-background/95 backdrop-blur-sm;
 }
 
-/* Cell selection styles */
-.modder-sheet-content table td {
-  position: relative;
-  user-select: none;
-}
-
-.modder-sheet-content table td.selected {
-  background-color: hsl(var(--primary) / 0.1);
-  border: 2px solid hsl(var(--primary));
-}
-
-/* Boolean cell styles */
+/* Boolean cell styling */
 .boolean-cell {
-  min-width: 80px;
+  @apply min-w-[80px];
 }
 
 /* Responsive table */
 @media (max-width: 768px) {
   .modder-sheet-container {
-    height: calc(100vh - 300px);
-    min-height: 400px;
+    @apply h-[400px];
+  }
+}
+
+/* Fullscreen mode */
+.modder-sheet-container.fullscreen {
+  @apply fixed inset-4 z-50 h-auto;
+}
+
+/* Selection highlighting */
+.cell-selected {
+  @apply bg-primary/20 border-2 border-primary;
+}
+
+/* Excel-like grid */
+.modder-sheet-content table {
+  @apply border-collapse;
+}
+
+.modder-sheet-content table th,
+.modder-sheet-content table td {
+  @apply border-r border-b border-border/30;
+}
+
+.modder-sheet-content table th:last-child,
+.modder-sheet-content table td:last-child {
+  @apply border-r-0;
+}
+
+.modder-sheet-content table tr:last-child td {
+  @apply border-b-0;
+}
+
+/* Blur effects */
+.blur-bar {
+  @apply backdrop-blur-xl bg-background/80 supports-[backdrop-filter]:bg-background/60;
+}
+
+/* Loading animations */
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  background-size: 200px 100%;
+}
+
+/* Custom scrollbar for better UX */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Responsive design improvements */
+@media (max-width: 640px) {
+  .ios-card {
+    @apply rounded-xl;
   }
 
-  .modder-sheet-content table th,
-  .modder-sheet-content table td {
-    min-width: 100px;
-    font-size: 12px;
-    padding: 8px;
+  .ios-button {
+    @apply rounded-lg;
+  }
+}
+
+/* Print styles */
+@media print {
+  .modder-sheet-container {
+    @apply h-auto overflow-visible;
+  }
+
+  .modder-sheet-content {
+    @apply overflow-visible;
+  }
+
+  .ios-card {
+    @apply shadow-none border border-gray-300;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .ios-card {
+    @apply border-2 border-foreground/20;
+  }
+
+  .ios-button {
+    @apply border-2 border-foreground/20;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .ios-button {
+    @apply transition-none;
+  }
+
+  .animate-shimmer {
+    animation: none;
   }
 }

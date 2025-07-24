@@ -29,6 +29,8 @@ import {
   Undo,
   Redo,
   MousePointer,
+  Maximize,
+  Minimize,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import {
@@ -160,6 +162,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
   const [isSelecting, setIsSelecting] = useState(false)
   const [selectionStart, setSelectionStart] = useState<{ row: number; col: string } | null>(null)
   const [showSearch, setShowSearch] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   const tableRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -246,8 +249,8 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
   const getVisibleColumns = () => {
     if (tableName === "products") {
       return [
-        { key: "images", label: "Rasm", type: "image" },
-        { key: "name_uz", label: "Nomi", type: "text" },
+        { key: "images", label: "Rasm", type: "image", sticky: true },
+        { key: "name_uz", label: "Nomi", type: "text", sticky: true },
         { key: "price", label: "Narxi", type: "number" },
         { key: "unit", label: "O'lchov", type: "select", options: ["dona", "kg", "m", "m2", "m3", "litr"] },
         { key: "stock_quantity", label: "Miqdor", type: "number" },
@@ -277,8 +280,8 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
       ]
     } else if (tableName === "orders") {
       return [
-        { key: "customer_name", label: "Mijoz", type: "text" },
-        { key: "customer_phone", label: "Telefon", type: "text" },
+        { key: "customer_name", label: "Mijoz", type: "text", sticky: true },
+        { key: "customer_phone", label: "Telefon", type: "text", sticky: true },
         {
           key: "status",
           label: "Buyurtma holati",
@@ -301,19 +304,20 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
       ]
     } else if (tableName === "debtors") {
       return [
-        { key: "order_number", label: "Raqam", type: "text" },
-        { key: "customer_name", label: "Mijoz", type: "text" },
+        { key: "order_number", label: "Raqam", type: "text", sticky: true },
+        { key: "customer_name", label: "Mijoz", type: "text", sticky: true },
         { key: "customer_phone", label: "Telefon", type: "text" },
         { key: "total_amount", label: "Summa", type: "number" },
         { key: "borrowed_period", label: "Asosiy muddat", type: "number" },
         { key: "borrowed_additional_period", label: "Qo'shimcha muddat", type: "number" },
         { key: "days_remaining", label: "Qolgan kunlar", type: "number" },
         { key: "is_overdue", label: "Kechikkan", type: "boolean" },
+        { key: "was_qarzdor", label: "Oldingi qarzdor", type: "boolean" },
         { key: "borrowed_updated_at", label: "Yangilangan", type: "datetime" },
       ]
     } else if (tableName === "categories") {
       return [
-        { key: "name_uz", label: "Nomi", type: "text" },
+        { key: "name_uz", label: "Nomi", type: "text", sticky: true },
         {
           key: "parent_id",
           label: "Ota kategoriya",
@@ -324,11 +328,28 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
         { key: "products_count", label: "Mahsulotlar", type: "number" },
         { key: "created_at", label: "Yaratilgan", type: "datetime" },
       ]
+    } else if (tableName === "rentals") {
+      return [
+        { key: "order_number", label: "Raqam", type: "text", sticky: true },
+        { key: "customer_name", label: "Mijoz", type: "text", sticky: true },
+        { key: "customer_phone", label: "Telefon", type: "text" },
+        { key: "rental_duration", label: "Muddat (kun)", type: "number" },
+        { key: "rental_price_per_day", label: "Kunlik narx", type: "number" },
+        { key: "deposit_amount", label: "Omonat", type: "number" },
+        { key: "is_deposit_paid", label: "Omonat to'langan", type: "boolean" },
+        { key: "is_returned", label: "Qaytarilgan", type: "boolean" },
+        { key: "rental_start_date", label: "Boshlanish", type: "datetime" },
+        { key: "rental_end_date", label: "Tugash", type: "datetime" },
+        { key: "return_date", label: "Qaytarilgan sana", type: "datetime" },
+        { key: "total_amount", label: "Jami summa", type: "number" },
+      ]
     }
     return []
   }
 
   const visibleColumns = getVisibleColumns().filter((col) => !hiddenColumns.includes(col.key))
+  const stickyColumns = visibleColumns.filter((col) => col.sticky)
+  const regularColumns = visibleColumns.filter((col) => !col.sticky)
 
   // Enhanced search with transliteration
   const filteredData = editedData.filter((item) => {
@@ -584,6 +605,20 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
       newRow.total_amount = 0
       newRow.subtotal = 0
       newRow.delivery_fee = 0
+    } else if (tableName === "rentals") {
+      newRow.order_number = `RNT-${Date.now()}`
+      newRow.customer_name = ""
+      newRow.customer_phone = ""
+      newRow.status = "pending"
+      newRow.product_type = "rental"
+      newRow.rental_duration = 1
+      newRow.rental_price_per_day = 0
+      newRow.deposit_amount = 0
+      newRow.is_deposit_paid = false
+      newRow.is_returned = false
+      newRow.rental_start_date = new Date().toISOString()
+      newRow.rental_end_date = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      newRow.total_amount = 0
     } else {
       // Initialize with default values for other tables
       visibleColumns.forEach((col) => {
@@ -605,15 +640,15 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
     setHasChanges(true)
   }
 
-  // Excel Export Functions
+  // Excel Export Functions with full Excel library features
   const exportToExcel = (selectedOnly = false) => {
     try {
       const dataToExport =
         selectedOnly && selectedRows.length > 0 ? selectedRows.map((index) => sortedData[index]) : sortedData
 
-      // Prepare data for Excel
-      const excelData = dataToExport.map((item) => {
-        const row: any = {}
+      // Prepare data for Excel with advanced formatting
+      const excelData = dataToExport.map((item, index) => {
+        const row: any = { "#": index + 1 }
         visibleColumns.forEach((col) => {
           const value = item[col.key]
 
@@ -634,10 +669,13 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
               shipped: "Yuborilgan",
               delivered: "Yetkazilgan",
               cancelled: "Bekor qilingan",
+              returned: "Qaytarilgan",
             }
             row[col.label] = statusLabels[value] || value
           } else if (col.type === "select" && col.key === "product_type") {
             row[col.label] = value === "rental" ? "Ijara" : "Sotuv"
+          } else if (col.type === "number") {
+            row[col.label] = typeof value === "number" ? value : Number.parseFloat(value) || 0
           } else {
             row[col.label] = value || ""
           }
@@ -645,20 +683,58 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
         return row
       })
 
-      // Create workbook
+      // Create workbook with advanced features
       const wb = XLSX.utils.book_new()
       const ws = XLSX.utils.json_to_sheet(excelData)
 
       // Set column widths
-      const colWidths = visibleColumns.map((col) => ({ wch: 15 }))
+      const colWidths = [{ wch: 5 }, ...visibleColumns.map((col) => ({ wch: col.type === "text" ? 20 : 15 }))]
       ws["!cols"] = colWidths
+
+      // Add autofilter
+      const range = XLSX.utils.decode_range(ws["!ref"] || "A1")
+      ws["!autofilter"] = { ref: XLSX.utils.encode_range(range) }
+
+      // Freeze first row
+      ws["!freeze"] = { xSplit: 0, ySplit: 1 }
+
+      // Add conditional formatting for boolean columns
+      const conditionalFormats: any[] = []
+      visibleColumns.forEach((col, colIndex) => {
+        if (col.type === "boolean") {
+          const colLetter = XLSX.utils.encode_col(colIndex + 1)
+          conditionalFormats.push({
+            type: "cellIs",
+            operator: "equal",
+            formula: '"Ha"',
+            style: { fill: { fgColor: { rgb: "90EE90" } } },
+            ref: `${colLetter}2:${colLetter}${excelData.length + 1}`,
+          })
+        }
+      })
 
       // Add worksheet to workbook
       XLSX.utils.book_append_sheet(wb, ws, tableName)
 
-      // Save file
+      // Add summary sheet
+      const summaryData = [
+        ["Jadval nomi", tableName],
+        ["Export sanasi", new Date().toLocaleDateString("uz-UZ")],
+        ["Jami yozuvlar", excelData.length],
+        ["Ustunlar soni", visibleColumns.length],
+        ["", ""],
+        ["Ustunlar ro'yxati", ""],
+        ...visibleColumns.map((col) => [col.label, col.type]),
+      ]
+
+      const summaryWs = XLSX.utils.aoa_to_sheet(summaryData)
+      summaryWs["!cols"] = [{ wch: 20 }, { wch: 20 }]
+      XLSX.utils.book_append_sheet(wb, summaryWs, "Ma'lumot")
+
+      // Save file with timestamp
       const suffix = selectedOnly ? "_selected" : ""
-      XLSX.writeFile(wb, `${tableName}_export${suffix}_${new Date().toISOString().split("T")[0]}.xlsx`)
+      const timestamp = new Date().toISOString().split("T")[0]
+      XLSX.writeFile(wb, `${tableName}_export${suffix}_${timestamp}.xlsx`)
     } catch (error) {
       console.error("Error exporting to Excel:", error)
       alert("Excel eksport qilishda xatolik yuz berdi")
@@ -703,6 +779,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                 Yuborilgan: "shipped",
                 Yetkazilgan: "delivered",
                 "Bekor qilingan": "cancelled",
+                Qaytarilgan: "returned",
               }
               processedRow[col.key] = statusMap[excelValue] || "pending"
             } else {
@@ -816,7 +893,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
 
     const cellClass = `p-3 cursor-pointer hover:bg-accent/50 transition-colors max-w-[200px] ${
       isSelected ? "bg-primary/20 border-2 border-primary" : ""
-    }`
+    } ${column.sticky ? "sticky left-0 bg-background z-10 border-r border-border" : ""}`
 
     if (column.type === "boolean") {
       return (
@@ -895,6 +972,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
         shipped: "Yuborilgan",
         delivered: "Yetkazilgan",
         cancelled: "Bekor qilingan",
+        returned: "Qaytarilgan",
       }
       return (
         <div className={cellClass}>
@@ -925,7 +1003,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
   }
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 ${isFullscreen ? "fixed inset-0 z-50 bg-background p-4" : ""}`}>
       {/* Advanced Toolbar */}
       <Card className="ios-card">
         <CardHeader className="pb-3">
@@ -936,6 +1014,14 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
               {selectedRows.length > 0 && <Badge variant="secondary">{selectedRows.length} tanlangan</Badge>}
               {selectedCells.length > 0 && <Badge variant="secondary">{selectedCells.length} katak</Badge>}
               {hasChanges && <Badge variant="destructive">Saqlanmagan</Badge>}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                className="ios-button bg-transparent"
+              >
+                {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -992,7 +1078,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
 
             <Button onClick={addNewRow} variant="outline" className="ios-button bg-transparent">
               <Plus className="h-4 w-4 mr-2" />
-              {tableName === "orders" ? "Yangi buyurtma" : "Qator qo'shish"}
+              {tableName === "orders" ? "Yangi buyurtma" : tableName === "rentals" ? "Yangi arenda" : "Qator qo'shish"}
             </Button>
 
             {/* History Actions */}
@@ -1111,15 +1197,15 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
         </CardContent>
       </Card>
 
-      {/* Data Table - Fixed Container */}
-      <div className="modder-sheet-container">
+      {/* Data Table - Responsive Container */}
+      <div className={`modder-sheet-container ${isFullscreen ? "h-[calc(100vh-200px)]" : ""}`}>
         <Card className="ios-card h-full">
           <CardContent className="p-0 h-full">
-            <div className="modder-sheet-content" ref={tableRef}>
+            <div className="modder-sheet-content overflow-auto" ref={tableRef}>
               <table className="w-full">
-                <thead className="sticky top-0 bg-muted/50 z-10">
+                <thead className="sticky top-0 bg-muted/50 z-20">
                   <tr className="border-b border-border">
-                    <th className="text-left p-3 font-medium text-sm bg-muted/50 w-12">
+                    <th className="text-left p-3 font-medium text-sm bg-muted/50 w-12 sticky left-0 z-30">
                       <input
                         type="checkbox"
                         checked={selectedRows.length === sortedData.length && sortedData.length > 0}
@@ -1127,8 +1213,26 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                         className="rounded"
                       />
                     </th>
-                    <th className="text-left p-3 font-medium text-sm bg-muted/50 w-12">#</th>
-                    {visibleColumns.map((column) => (
+                    <th className="text-left p-3 font-medium text-sm bg-muted/50 w-12 sticky left-12 z-30">#</th>
+                    {stickyColumns.map((column, index) => (
+                      <th
+                        key={column.key}
+                        className={`text-left p-3 font-medium text-sm bg-muted/50 min-w-[120px] cursor-pointer hover:bg-muted/70 transition-colors sticky z-30 border-r border-border`}
+                        style={{ left: `${48 + index * 120}px` }}
+                        onClick={() => handleSort(column.key)}
+                      >
+                        <div className="flex items-center gap-2">
+                          {column.label}
+                          {sortColumn === column.key &&
+                            (sortDirection === "asc" ? (
+                              <SortAsc className="h-3 w-3" />
+                            ) : (
+                              <SortDesc className="h-3 w-3" />
+                            ))}
+                        </div>
+                      </th>
+                    ))}
+                    {regularColumns.map((column) => (
                       <th
                         key={column.key}
                         className="text-left p-3 font-medium text-sm bg-muted/50 min-w-[120px] cursor-pointer hover:bg-muted/70 transition-colors"
@@ -1156,7 +1260,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                         selectedRows.includes(rowIndex) ? "bg-muted/50" : ""
                       }`}
                     >
-                      <td className="p-3">
+                      <td className="p-3 sticky left-0 bg-background z-10 border-r border-border">
                         <input
                           type="checkbox"
                           checked={selectedRows.includes(rowIndex)}
@@ -1164,8 +1268,22 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                           className="rounded"
                         />
                       </td>
-                      <td className="p-3 text-sm text-muted-foreground">{rowIndex + 1}</td>
-                      {visibleColumns.map((column) => (
+                      <td className="p-3 text-sm text-muted-foreground sticky left-12 bg-background z-10 border-r border-border">
+                        {rowIndex + 1}
+                      </td>
+                      {stickyColumns.map((column, index) => (
+                        <td
+                          key={column.key}
+                          className="border-r border-border sticky z-10 bg-background"
+                          style={{ left: `${48 + index * 120}px` }}
+                          onMouseDown={(e) => handleCellMouseDown(rowIndex, column.key, e)}
+                          onMouseEnter={() => handleCellMouseEnter(rowIndex, column.key)}
+                          onDoubleClick={() => setEditingCell({ row: rowIndex, col: column.key })}
+                        >
+                          {renderCellValue(item, column, rowIndex)}
+                        </td>
+                      ))}
+                      {regularColumns.map((column) => (
                         <td
                           key={column.key}
                           className="border-r border-border last:border-r-0"
@@ -1224,7 +1342,11 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                         className="w-full h-8 text-muted-foreground hover:text-foreground ios-button"
                       >
                         <Plus className="h-4 w-4 mr-2" />
-                        {tableName === "orders" ? "Yangi buyurtma qo'shish" : "Yangi qator qo'shish"}
+                        {tableName === "orders"
+                          ? "Yangi buyurtma qo'shish"
+                          : tableName === "rentals"
+                            ? "Yangi arenda qo'shish"
+                            : "Yangi qator qo'shish"}
                       </Button>
                     </td>
                   </tr>
@@ -1237,7 +1359,11 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                   <p>Ma'lumot topilmadi</p>
                   <Button onClick={addNewRow} variant="outline" className="mt-4 ios-button bg-transparent">
                     <Plus className="h-4 w-4 mr-2" />
-                    {tableName === "orders" ? "Birinchi buyurtmani qo'shish" : "Birinchi yozuvni qo'shish"}
+                    {tableName === "orders"
+                      ? "Birinchi buyurtmani qo'shish"
+                      : tableName === "rentals"
+                        ? "Birinchi arendani qo'shish"
+                        : "Birinchi yozuvni qo'shish"}
                   </Button>
                 </div>
               )}
@@ -1258,7 +1384,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
             </Badge>
           )}
         </div>
-        <div className="text-xs text-muted-foreground/70">ModderSheet v4.0 - JamolStroy Admin Panel</div>
+        <div className="text-xs text-muted-foreground/70">ModderSheet v5.0 - JamolStroy Admin Panel</div>
       </div>
     </div>
   )

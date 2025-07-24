@@ -18,64 +18,96 @@ export default function AdminLoginPage() {
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const isCheckingRef = useRef(false)
   const hasRedirectedRef = useRef(false)
+  const mountedRef = useRef(true)
 
+  // Cleanup on unmount
   useEffect(() => {
-    // Only redirect if user exists and we haven't redirected yet
-    if (user && !loading && !hasRedirectedRef.current) {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      isCheckingRef.current = false
+    }
+  }, [])
+
+  // Handle user redirect only once
+  useEffect(() => {
+    if (!loading && user && !hasRedirectedRef.current && mountedRef.current) {
       hasRedirectedRef.current = true
-      router.push("/")
+      // Clear any intervals before redirect
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      router.replace("/")
     }
   }, [user, loading, router])
 
+  // Handle login status checking
   useEffect(() => {
-    if (tempToken && loginStatus === "pending" && !isCheckingRef.current) {
-      isCheckingRef.current = true
-
-      intervalRef.current = setInterval(async () => {
-        try {
-          const response = await fetch(`/api/admin-login?token=${tempToken}`)
-          const data = await response.json()
-
-          if (data.status === "approved" && data.user) {
-            setLoginStatus("approved")
-            localStorage.setItem("jamolstroy_admin", JSON.stringify(data.user))
-
-            // Clear interval before redirect
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current)
-              intervalRef.current = null
-            }
-            isCheckingRef.current = false
-
-            // Delay redirect to show success message
-            setTimeout(() => {
-              if (!hasRedirectedRef.current) {
-                hasRedirectedRef.current = true
-                window.location.href = "/"
-              }
-            }, 1500)
-          } else if (data.status === "rejected") {
-            setLoginStatus("rejected")
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current)
-              intervalRef.current = null
-            }
-            isCheckingRef.current = false
-          } else if (data.status === "unauthorized") {
-            setLoginStatus("rejected")
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current)
-              intervalRef.current = null
-            }
-            isCheckingRef.current = false
-            alert("Admin huquqi talab qilinadi!")
-          }
-        } catch (error) {
-          console.error("Admin login status check error:", error)
-        }
-      }, 3000)
+    if (!tempToken || loginStatus !== "pending" || isCheckingRef.current || !mountedRef.current) {
+      return
     }
 
+    isCheckingRef.current = true
+
+    const checkLoginStatus = async () => {
+      if (!mountedRef.current) return
+
+      try {
+        const response = await fetch(`/api/admin-login?token=${tempToken}`)
+        if (!response.ok) throw new Error("Network response was not ok")
+
+        const data = await response.json()
+
+        if (!mountedRef.current) return
+
+        if (data.status === "approved" && data.user) {
+          setLoginStatus("approved")
+          localStorage.setItem("jamolstroy_admin", JSON.stringify(data.user))
+
+          // Clear interval
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current)
+            intervalRef.current = null
+          }
+          isCheckingRef.current = false
+
+          // Delay redirect to show success message
+          setTimeout(() => {
+            if (mountedRef.current && !hasRedirectedRef.current) {
+              hasRedirectedRef.current = true
+              window.location.replace("/")
+            }
+          }, 1500)
+        } else if (data.status === "rejected" || data.status === "unauthorized") {
+          setLoginStatus("rejected")
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current)
+            intervalRef.current = null
+          }
+          isCheckingRef.current = false
+
+          if (data.status === "unauthorized") {
+            alert("Admin huquqi talab qilinadi!")
+          }
+        }
+      } catch (error) {
+        console.error("Admin login status check error:", error)
+        // Don't stop checking on network errors, just log them
+      }
+    }
+
+    // Initial check
+    checkLoginStatus()
+
+    // Set up interval for subsequent checks
+    intervalRef.current = setInterval(checkLoginStatus, 3000)
+
+    // Cleanup function
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
@@ -85,18 +117,9 @@ export default function AdminLoginPage() {
     }
   }, [tempToken, loginStatus])
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-      isCheckingRef.current = false
-    }
-  }, [])
-
   const handleTelegramLogin = async () => {
+    if (!mountedRef.current) return
+
     try {
       setIsLoading(true)
       const clientId = "jamolstroy_admin_" + Date.now()
@@ -109,25 +132,30 @@ export default function AdminLoginPage() {
         body: JSON.stringify({ client_id: clientId }),
       })
 
+      if (!response.ok) throw new Error("Network response was not ok")
       const data = await response.json()
 
-      if (response.ok) {
+      if (mountedRef.current) {
         setTempToken(data.temp_token)
         setTelegramUrl(data.telegram_url)
         setLoginStatus("pending")
         window.open(data.telegram_url, "_blank")
-      } else {
-        throw new Error(data.error)
       }
     } catch (error) {
       console.error("Admin Telegram login error:", error)
-      alert("Telegram login xatoligi")
+      if (mountedRef.current) {
+        alert("Telegram login xatoligi")
+      }
     } finally {
-      setIsLoading(false)
+      if (mountedRef.current) {
+        setIsLoading(false)
+      }
     }
   }
 
   const resetLogin = () => {
+    if (!mountedRef.current) return
+
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
@@ -138,6 +166,7 @@ export default function AdminLoginPage() {
     setTelegramUrl("")
   }
 
+  // Show loading while checking auth
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
