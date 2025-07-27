@@ -1,190 +1,211 @@
 "use client"
 
+import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Star, Phone, MapPin, Clock, User, FileText } from "lucide-react"
-import Image from "next/image"
-
-interface Worker {
-  id: string
-  first_name: string
-  last_name: string
-  profession_uz: string
-  profession_ru: string
-  skills: string[]
-  experience_years: number
-  hourly_rate: number
-  daily_rate: number
-  rating: number
-  review_count: number
-  avatar_url: string
-  phone_number: string
-  is_available: boolean
-  location: string
-  specialization: string
-  description: string
-  created_at: string
-  updated_at: string
-}
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { User, Phone, MapPin, Star, Calendar, Briefcase, FileText, Eye, Shield } from "lucide-react"
+import { MDPasswordDialog } from "@/components/md-password-dialog"
 
 interface WorkerViewDialogProps {
+  worker: any
   open: boolean
   onOpenChange: (open: boolean) => void
-  worker: Worker | null
 }
 
-export function WorkerViewDialog({ open, onOpenChange, worker }: WorkerViewDialogProps) {
+export function WorkerViewDialog({ worker, open, onOpenChange }: WorkerViewDialogProps) {
+  const [showDocuments, setShowDocuments] = useState(false)
+  const [showMDPassword, setShowMDPassword] = useState(false)
+
+  const handleViewDocuments = () => {
+    setShowMDPassword(true)
+  }
+
+  const handleMDPasswordSuccess = () => {
+    setShowMDPassword(false)
+    setShowDocuments(true)
+  }
+
   if (!worker) return null
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Usta ma'lumotlari</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-start gap-4">
-            <div className="worker-avatar">
-              <Image
-                src={worker.avatar_url || "/placeholder.svg"}
-                alt={`${worker.first_name} ${worker.last_name}`}
-                width={80}
-                height={80}
-                className="worker-avatar"
-              />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold">
-                {worker.first_name} {worker.last_name}
-              </h2>
-              <p className="text-lg text-muted-foreground">{worker.profession_uz}</p>
-              {worker.profession_ru && <p className="text-sm text-muted-foreground">{worker.profession_ru}</p>}
-              <div className="flex items-center gap-2 mt-2">
-                <Badge variant={worker.is_available ? "default" : "secondary"}>
-                  {worker.is_available ? "Mavjud" : "Band"}
-                </Badge>
-                {worker.rating > 0 && (
-                  <div className="flex items-center gap-1">
-                    <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                    <span className="text-sm">
-                      {worker.rating.toFixed(1)} ({worker.review_count})
-                    </span>
-                  </div>
-                )}
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <Avatar className="h-12 w-12">
+                <AvatarImage src={worker.avatar_url || "/placeholder.svg"} />
+                <AvatarFallback>
+                  {worker.first_name?.[0]}
+                  {worker.last_name?.[0]}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <h2 className="text-xl font-semibold">
+                  {worker.first_name} {worker.last_name}
+                </h2>
+                <p className="text-sm text-muted-foreground">{worker.profession_uz}</p>
               </div>
-            </div>
-          </div>
+            </DialogTitle>
+          </DialogHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Contact Info */}
+            {/* Basic Information */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <User className="h-5 w-5" />
-                  Aloqa ma'lumotlari
+                  Asosiy ma'lumotlar
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {worker.phone_number && (
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span>{worker.phone_number || "Telefon ko'rsatilmagan"}</span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span>{worker.location || "Manzil ko'rsatilmagan"}</span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Briefcase className="h-4 w-4 text-muted-foreground" />
+                  <span>{worker.specialization || "Mutaxassislik ko'rsatilmagan"}</span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span>{worker.experience_years} yil tajriba</span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Star className="h-4 w-4 text-muted-foreground" />
                   <div className="flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span>{worker.phone_number}</span>
+                    <span>{worker.rating || 0}/5</span>
+                    <Badge variant="secondary">{worker.review_count || 0} ta sharh</Badge>
                   </div>
-                )}
-                {worker.location && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span>{worker.location}</span>
-                  </div>
-                )}
+                </div>
+
+                <div className="pt-2">
+                  <Badge variant={worker.is_available ? "default" : "secondary"}>
+                    {worker.is_available ? "Mavjud" : "Band"}
+                  </Badge>
+                </div>
               </CardContent>
             </Card>
 
-            {/* Professional Info */}
+            {/* Skills and Rates */}
             <Card>
               <CardHeader>
+                <CardTitle>Ko'nikmalar va narxlar</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <h4 className="font-medium mb-2">Ko'nikmalar:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {worker.skills && worker.skills.length > 0 ? (
+                      worker.skills.map((skill: string, index: number) => (
+                        <Badge key={index} variant="outline">
+                          {skill}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-muted-foreground">Ko'nikmalar ko'rsatilmagan</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-medium">Soatlik narx:</h4>
+                    <p className="text-lg font-semibold">
+                      {worker.hourly_rate ? `${worker.hourly_rate.toLocaleString()} so'm` : "Ko'rsatilmagan"}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="font-medium">Kunlik narx:</h4>
+                    <p className="text-lg font-semibold">
+                      {worker.daily_rate ? `${worker.daily_rate.toLocaleString()} so'm` : "Ko'rsatilmagan"}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Description */}
+            {worker.description && (
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Tavsif
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm leading-relaxed">{worker.description}</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Documents Section */}
+            <Card className="md:col-span-2">
+              <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Professional ma'lumotlar
+                  <Shield className="h-5 w-5" />
+                  Hujjatlar
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span>Tajriba:</span>
-                  <span className="font-medium">{worker.experience_years} yil</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Soatlik narx:</span>
-                  <span className="font-medium">{worker.hourly_rate.toLocaleString()} so'm</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Kunlik narx:</span>
-                  <span className="font-medium">{worker.daily_rate.toLocaleString()} so'm</span>
-                </div>
-                {worker.specialization && (
-                  <div>
-                    <span className="text-sm text-muted-foreground">Mutaxassislik:</span>
-                    <p className="font-medium">{worker.specialization}</p>
+              <CardContent>
+                <Button
+                  onClick={handleViewDocuments}
+                  variant="outline"
+                  className="flex items-center gap-2 bg-transparent"
+                >
+                  <Eye className="h-4 w-4" />
+                  Hujjatlarni ko'rish
+                </Button>
+
+                {showDocuments && (
+                  <div className="mt-4 p-4 border rounded-lg bg-muted/50">
+                    <p className="text-sm text-muted-foreground mb-2">Passport ma'lumotlari va hujjatlar:</p>
+                    {/* Documents will be loaded here after MD password verification */}
+                    <div className="space-y-2">
+                      <p>
+                        <strong>Passport seriya:</strong> {worker.passport_series || "Ko'rsatilmagan"}
+                      </p>
+                      <p>
+                        <strong>Passport raqam:</strong> {worker.passport_number || "Ko'rsatilmagan"}
+                      </p>
+                      {worker.passport_image && (
+                        <div>
+                          <strong>Passport rasmi:</strong>
+                          <img
+                            src={worker.passport_image || "/placeholder.svg"}
+                            alt="Passport"
+                            className="mt-2 max-w-xs rounded border"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </CardContent>
             </Card>
           </div>
+        </DialogContent>
+      </Dialog>
 
-          {/* Skills */}
-          {worker.skills.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Ko'nikmalar</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {worker.skills.map((skill, index) => (
-                    <Badge key={index} variant="outline">
-                      {skill}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Description */}
-          {worker.description && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Tavsif
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-relaxed">{worker.description}</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Dates */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Tizim ma'lumotlari</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span>Qo'shilgan:</span>
-                <span>{new Date(worker.created_at).toLocaleDateString("uz-UZ")}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span>Yangilangan:</span>
-                <span>{new Date(worker.updated_at).toLocaleDateString("uz-UZ")}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </DialogContent>
-    </Dialog>
+      <MDPasswordDialog
+        open={showMDPassword}
+        onOpenChange={setShowMDPassword}
+        onSuccess={handleMDPasswordSuccess}
+        title="Hujjatlarni ko'rish"
+        description="Ishchi hujjatlarini ko'rish uchun MD parolni kiriting"
+      />
+    </>
   )
 }

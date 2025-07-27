@@ -81,7 +81,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    overflow-x: hidden;
   }
 }
 
@@ -96,37 +95,6 @@
 
 .notification-badge {
   @apply absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center;
-}
-
-/* Fixed layout improvements */
-.main-container {
-  @apply w-full max-w-full overflow-x-hidden;
-}
-
-.sidebar-layout {
-  @apply flex min-h-screen w-full max-w-full overflow-x-hidden;
-}
-
-.content-area {
-  @apply flex-1 min-w-0 overflow-x-hidden;
-}
-
-/* Responsive improvements */
-.responsive-container {
-  @apply w-full max-w-full overflow-x-hidden;
-}
-
-.responsive-grid {
-  @apply grid gap-4;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
-
-.responsive-table-container {
-  @apply w-full overflow-x-auto;
-}
-
-.responsive-table {
-  @apply min-w-full table-fixed;
 }
 
 /* ModderSheet specific styles */
@@ -165,10 +133,6 @@
 @media (max-width: 768px) {
   .modder-sheet-container {
     @apply h-[400px];
-  }
-
-  .responsive-grid {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -294,6 +258,28 @@
   }
 }
 
+/* Fixed layout and responsive improvements */
+.main-container {
+  @apply max-w-full overflow-x-hidden;
+}
+
+.sidebar-layout {
+  @apply flex min-h-screen max-w-full overflow-x-hidden;
+}
+
+.content-area {
+  @apply flex-1 min-w-0 overflow-x-hidden;
+}
+
+/* Table responsive improvements */
+.responsive-table {
+  @apply w-full overflow-x-auto;
+}
+
+.responsive-table table {
+  @apply min-w-full;
+}
+
 /* Search improvements for Cyrillic/Latin */
 .search-enhanced {
   @apply relative;
@@ -305,237 +291,40 @@
 }
 
 .category-item {
-  @apply flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border/50;
+  @apply flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors;
 }
 
 .category-indent {
   @apply border-l-2 border-muted ml-4 pl-4;
 }
 
-.tree-item {
-  @apply flex items-center justify-between p-2 rounded-lg hover:bg-muted/30 transition-colors min-h-[48px];
-}
-
-.tree-indent {
-  @apply relative;
-}
-
-.tree-indent::before {
-  content: "";
-  @apply absolute left-0 top-0 bottom-0 w-px bg-border;
-}
-
 /* Product specifications */
 .spec-editor {
-  @apply space-y-4 p-4 border rounded-lg bg-muted/20;
+  @apply space-y-4 p-4 border rounded-lg;
 }
 
 .spec-item {
-  @apply flex items-center gap-2 p-3 bg-background rounded-lg border border-border/50;
-}
-
-.spec-group {
-  @apply space-y-2 p-3 border rounded-lg bg-muted/10;
-}
-
-.spec-option {
-  @apply flex items-center justify-between p-2 bg-background rounded border border-border/30;
+  @apply flex items-center gap-2 p-2 bg-muted/30 rounded;
 }
 
 /* Workers section */
 .worker-card {
-  @apply p-4 border rounded-lg hover:shadow-md transition-all bg-card;
+  @apply p-4 border rounded-lg hover:shadow-md transition-all;
 }
 
 .worker-avatar {
-  @apply w-16 h-16 rounded-full object-cover border-2 border-border;
+  @apply w-16 h-16 rounded-full object-cover;
 }
 
 /* Memory section */
 .storage-card {
-  @apply p-6 border rounded-lg bg-card;
+  @apply p-6 border rounded-lg;
 }
 
 .storage-progress {
-  @apply w-full h-3 bg-muted rounded-full overflow-hidden;
+  @apply w-full h-2 bg-muted rounded-full overflow-hidden;
 }
 
 .storage-bar {
-  @apply h-full bg-primary transition-all duration-300 rounded-full;
-}
-
-/* MD Password protection */
-.md-protected {
-  @apply relative;
-}
-
-.md-overlay {
-  @apply absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center;
-}
-
-/* Transliteration highlighting */
-.search-highlight {
-  @apply bg-yellow-200 dark:bg-yellow-800 px-1 rounded;
-}
-
-/* Improved form layouts */
-.form-grid {
-  @apply grid gap-4;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-}
-
-.form-section {
-  @apply space-y-4 p-4 border rounded-lg bg-muted/10;
-}
-
-/* Better mobile experience */
-@media (max-width: 768px) {
-  .category-item {
-    @apply p-2 text-sm;
-  }
-
-  .tree-item {
-    @apply min-h-[40px] p-1;
-  }
-
-  .worker-card {
-    @apply p-3;
-  }
-
-  .worker-avatar {
-    @apply w-12 h-12;
-  }
-
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Prevent horizontal overflow */
-.no-overflow {
-  @apply overflow-x-hidden max-w-full;
-}
-
-/* Ensure tables don't overflow */
-.table-responsive {
-  @apply overflow-x-auto w-full;
-}
-
-.table-responsive table {
-  @apply min-w-full;
-}
-
-/* Fixed sidebar width */
-.sidebar-fixed {
-  @apply w-64 flex-shrink-0;
-}
-
-/* Content area with proper spacing */
-.content-fixed {
-  @apply flex-1 min-w-0 p-6 overflow-x-hidden;
-}
-
-/* Specifications editor styles */
-.spec-type-header {
-  @apply flex items-center justify-between p-3 bg-muted/50 rounded-t-lg border-b;
-}
-
-.spec-option-item {
-  @apply grid grid-cols-1 md:grid-cols-3 gap-3 p-3 bg-background rounded border;
-}
-
-.spec-add-button {
-  @apply w-full p-2 border-2 border-dashed border-muted-foreground/30 rounded-lg hover:border-primary/50 transition-colors;
-}
-
-/* Google Drive integration styles */
-.drive-file-item {
-  @apply flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 transition-colors;
-}
-
-.drive-file-icon {
-  @apply w-8 h-8 flex-shrink-0;
-}
-
-.drive-upload-area {
-  @apply border-2 border-dashed border-muted-foreground/30 rounded-lg p-8 text-center hover:border-primary/50 transition-colors;
-}
-
-/* Workers document styles */
-.document-preview {
-  @apply aspect-[3/4] bg-muted rounded-lg overflow-hidden border;
-}
-
-.document-upload {
-  @apply border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 text-center hover:border-primary/50 transition-colors;
-}
-
-/* Enhanced mobile responsiveness */
-@media (max-width: 640px) {
-  .content-fixed {
-    @apply p-4;
-  }
-
-  .spec-option-item {
-    @apply grid-cols-1 gap-2;
-  }
-
-  .drive-file-item {
-    @apply flex-col items-start gap-2 p-2;
-  }
-}
-
-/* Accessibility improvements */
-.focus-visible {
-  @apply outline-2 outline-offset-2 outline-primary;
-}
-
-.sr-only {
-  @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0;
-}
-
-/* Animation improvements */
-.fade-in {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.slide-in {
-  animation: slideIn 0.3s ease-out;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
-/* Enhanced loading states */
-.skeleton {
-  @apply animate-pulse bg-muted rounded;
-}
-
-.skeleton-text {
-  @apply h-4 bg-muted rounded;
-}
-
-.skeleton-avatar {
-  @apply w-12 h-12 bg-muted rounded-full;
-}
-
-.skeleton-button {
-  @apply h-10 bg-muted rounded-lg;
+  @apply h-full bg-primary transition-all duration-300;
 }
