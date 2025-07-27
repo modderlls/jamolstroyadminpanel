@@ -257,3 +257,74 @@
     animation: none;
   }
 }
+
+/* Fixed layout and responsive improvements */
+.main-container {
+  @apply max-w-full overflow-x-hidden;
+}
+
+.sidebar-layout {
+  @apply flex min-h-screen max-w-full overflow-x-hidden;
+}
+
+.content-area {
+  @apply flex-1 min-w-0 overflow-x-hidden;
+}
+
+/* Table responsive improvements */
+.responsive-table {
+  @apply w-full overflow-x-auto;
+}
+
+.responsive-table table {
+  @apply min-w-full;
+}
+
+/* Search improvements for Cyrillic/Latin */
+.search-enhanced {
+  @apply relative;
+}
+
+/* Category tree improvements */
+.category-tree {
+  @apply space-y-1;
+}
+
+.category-item {
+  @apply flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors;
+}
+
+.category-indent {
+  @apply border-l-2 border-muted ml-4 pl-4;
+}
+
+/* Product specifications */
+.spec-editor {
+  @apply space-y-4 p-4 border rounded-lg;
+}
+
+.spec-item {
+  @apply flex items-center gap-2 p-2 bg-muted/30 rounded;
+}
+
+/* Workers section */
+.worker-card {
+  @apply p-4 border rounded-lg hover:shadow-md transition-all;
+}
+
+.worker-avatar {
+  @apply w-16 h-16 rounded-full object-cover;
+}
+
+/* Memory section */
+.storage-card {
+  @apply p-6 border rounded-lg;
+}
+
+.storage-progress {
+  @apply w-full h-2 bg-muted rounded-full overflow-hidden;
+}
+
+.storage-bar {
+  @apply h-full bg-primary transition-all duration-300;
+}
