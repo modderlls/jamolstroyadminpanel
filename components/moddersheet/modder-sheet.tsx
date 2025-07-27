@@ -163,7 +163,6 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
   const [selectionStart, setSelectionStart] = useState<{ row: number; col: string } | null>(null)
   const [showSearch, setShowSearch] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [currentCell, setCurrentCell] = useState<{ row: number; col: string } | null>(null)
 
   const tableRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -177,35 +176,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
     }
   }, [data])
 
-  const addToHistory = useCallback(
-    (newData: any[]) => {
-      const newHistory = history.slice(0, historyIndex + 1)
-      newHistory.push(JSON.parse(JSON.stringify(newData)))
-      setHistory(newHistory)
-      setHistoryIndex(newHistory.length - 1)
-    },
-    [history, historyIndex],
-  )
-
-  const handleUndo = () => {
-    if (historyIndex > 0) {
-      const prevData = history[historyIndex - 1]
-      setEditedData(prevData)
-      setHistoryIndex(historyIndex - 1)
-      setHasChanges(true)
-    }
-  }
-
-  const handleRedo = () => {
-    if (historyIndex < history.length - 1) {
-      const nextData = history[historyIndex + 1]
-      setEditedData(nextData)
-      setHistoryIndex(historyIndex + 1)
-      setHasChanges(true)
-    }
-  }
-
-  // Keyboard shortcuts and navigation
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey) {
@@ -234,59 +205,45 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
         }
       }
 
-      // Navigation with arrow keys and Tab
-      if (currentCell && !editingCell) {
-        const visibleColumns = getVisibleColumns().filter((col) => !hiddenColumns.includes(col.key))
-        const currentRowIndex = currentCell.row
-        const currentColIndex = visibleColumns.findIndex((col) => col.key === currentCell.col)
-
-        switch (e.key) {
-          case "ArrowUp":
-            e.preventDefault()
-            if (currentRowIndex > 0) {
-              setCurrentCell({ row: currentRowIndex - 1, col: currentCell.col })
-            }
-            break
-          case "ArrowDown":
-            e.preventDefault()
-            if (currentRowIndex < sortedData.length - 1) {
-              setCurrentCell({ row: currentRowIndex + 1, col: currentCell.col })
-            }
-            break
-          case "ArrowLeft":
-            e.preventDefault()
-            if (currentColIndex > 0) {
-              setCurrentCell({ row: currentRowIndex, col: visibleColumns[currentColIndex - 1].key })
-            }
-            break
-          case "ArrowRight":
-          case "Tab":
-            e.preventDefault()
-            if (currentColIndex < visibleColumns.length - 1) {
-              setCurrentCell({ row: currentRowIndex, col: visibleColumns[currentColIndex + 1].key })
-            } else if (currentRowIndex < sortedData.length - 1) {
-              setCurrentCell({ row: currentRowIndex + 1, col: visibleColumns[0].key })
-            }
-            break
-          case "Enter":
-            e.preventDefault()
-            setEditingCell(currentCell)
-            break
-        }
-      }
-
       if (e.key === "Escape") {
         setEditingCell(null)
         setShowSearch(false)
         setSelectedCells([])
         setSelectedRows([])
-        setCurrentCell(null)
       }
     }
 
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [hasChanges, currentCell, editingCell, sortedData?.length, hiddenColumns])
+  }, [hasChanges])
+
+  const addToHistory = useCallback(
+    (newData: any[]) => {
+      const newHistory = history.slice(0, historyIndex + 1)
+      newHistory.push(JSON.parse(JSON.stringify(newData)))
+      setHistory(newHistory)
+      setHistoryIndex(newHistory.length - 1)
+    },
+    [history, historyIndex],
+  )
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const prevData = history[historyIndex - 1]
+      setEditedData(prevData)
+      setHistoryIndex(historyIndex - 1)
+      setHasChanges(true)
+    }
+  }
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const nextData = history[historyIndex + 1]
+      setEditedData(nextData)
+      setHistoryIndex(historyIndex + 1)
+      setHasChanges(true)
+    }
+  }
 
   // Define visible columns based on table
   const getVisibleColumns = () => {
@@ -385,30 +342,6 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
         { key: "rental_end_date", label: "Tugash", type: "datetime" },
         { key: "return_date", label: "Qaytarilgan sana", type: "datetime" },
         { key: "total_amount", label: "Jami summa", type: "number" },
-      ]
-    } else if (tableName === "workers") {
-      return [
-        { key: "first_name", label: "Ism", type: "text", sticky: true },
-        { key: "last_name", label: "Familiya", type: "text", sticky: true },
-        { key: "profession_uz", label: "Kasb", type: "text" },
-        { key: "phone_number", label: "Telefon", type: "text" },
-        { key: "experience_years", label: "Tajriba (yil)", type: "number" },
-        { key: "hourly_rate", label: "Soatlik narx", type: "number" },
-        { key: "daily_rate", label: "Kunlik narx", type: "number" },
-        { key: "rating", label: "Reyting", type: "number" },
-        { key: "is_available", label: "Mavjud", type: "boolean" },
-        { key: "location", label: "Manzil", type: "text" },
-        { key: "created_at", label: "Yaratilgan", type: "datetime" },
-      ]
-    } else if (tableName === "ads") {
-      return [
-        { key: "name", label: "Nomi", type: "text", sticky: true },
-        { key: "image_url", label: "Rasm", type: "image" },
-        { key: "link", label: "Havola", type: "text" },
-        { key: "is_active", label: "Faol", type: "boolean" },
-        { key: "click_count", label: "Bosilishlar", type: "number" },
-        { key: "sort_order", label: "Tartib", type: "number" },
-        { key: "created_at", label: "Yaratilgan", type: "datetime" },
       ]
     }
     return []
@@ -571,10 +504,8 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
     }
   }
 
-  // Excel-like cell selection with navigation
+  // Excel-like cell selection
   const handleCellMouseDown = (rowIndex: number, columnKey: string, e: React.MouseEvent) => {
-    setCurrentCell({ row: rowIndex, col: columnKey })
-
     if (e.shiftKey && selectionStart) {
       // Range selection
       const startRow = Math.min(selectionStart.row, rowIndex)
@@ -688,24 +619,6 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
       newRow.rental_start_date = new Date().toISOString()
       newRow.rental_end_date = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       newRow.total_amount = 0
-    } else if (tableName === "workers") {
-      newRow.first_name = ""
-      newRow.last_name = ""
-      newRow.profession_uz = ""
-      newRow.phone_number = ""
-      newRow.experience_years = 0
-      newRow.hourly_rate = 0
-      newRow.daily_rate = 0
-      newRow.rating = 0
-      newRow.is_available = true
-      newRow.location = ""
-    } else if (tableName === "ads") {
-      newRow.name = ""
-      newRow.image_url = ""
-      newRow.link = ""
-      newRow.is_active = true
-      newRow.click_count = 0
-      newRow.sort_order = 0
     } else {
       // Initialize with default values for other tables
       visibleColumns.forEach((col) => {
@@ -899,7 +812,6 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
     const value = item[column.key]
     const isEditing = editingCell?.row === rowIndex && editingCell?.col === column.key
     const isSelected = selectedCells.some((cell) => cell.row === rowIndex && cell.col === column.key)
-    const isCurrent = currentCell?.row === rowIndex && currentCell?.col === column.key
 
     if (isEditing) {
       if (column.type === "boolean") {
@@ -981,9 +893,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
 
     const cellClass = `p-3 cursor-pointer hover:bg-accent/50 transition-colors max-w-[200px] ${
       isSelected ? "bg-primary/20 border-2 border-primary" : ""
-    } ${isCurrent ? "ring-2 ring-primary/50" : ""} ${
-      column.sticky ? "sticky left-0 bg-background z-10 border-r border-border" : ""
-    }`
+    } ${column.sticky ? "sticky left-0 bg-background z-10 border-r border-border" : ""}`
 
     if (column.type === "boolean") {
       return (
@@ -1168,15 +1078,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
 
             <Button onClick={addNewRow} variant="outline" className="ios-button bg-transparent">
               <Plus className="h-4 w-4 mr-2" />
-              {tableName === "orders"
-                ? "Yangi buyurtma"
-                : tableName === "rentals"
-                  ? "Yangi arenda"
-                  : tableName === "workers"
-                    ? "Yangi ishchi"
-                    : tableName === "ads"
-                      ? "Yangi reklama"
-                      : "Qator qo'shish"}
+              {tableName === "orders" ? "Yangi buyurtma" : tableName === "rentals" ? "Yangi arenda" : "Qator qo'shish"}
             </Button>
 
             {/* History Actions */}
@@ -1290,7 +1192,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
           {/* Keyboard Shortcuts Info */}
           <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2">
             <strong>Klaviatura:</strong> Ctrl+S (Saqlash), Ctrl+Z (Bekor qilish), Ctrl+Y (Qaytarish), Ctrl+F (Qidirish),
-            Shift+Click (Oraliq tanlash), Tab/Strelkalar (Navigatsiya), Enter (Tahrirlash)
+            Shift+Click (Oraliq tanlash)
           </div>
         </CardContent>
       </Card>
@@ -1444,11 +1346,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                           ? "Yangi buyurtma qo'shish"
                           : tableName === "rentals"
                             ? "Yangi arenda qo'shish"
-                            : tableName === "workers"
-                              ? "Yangi ishchi qo'shish"
-                              : tableName === "ads"
-                                ? "Yangi reklama qo'shish"
-                                : "Yangi qator qo'shish"}
+                            : "Yangi qator qo'shish"}
                       </Button>
                     </td>
                   </tr>
@@ -1465,11 +1363,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
                       ? "Birinchi buyurtmani qo'shish"
                       : tableName === "rentals"
                         ? "Birinchi arendani qo'shish"
-                        : tableName === "workers"
-                          ? "Birinchi ishchini qo'shish"
-                          : tableName === "ads"
-                            ? "Birinchi reklamani qo'shish"
-                            : "Birinchi yozuvni qo'shish"}
+                        : "Birinchi yozuvni qo'shish"}
                   </Button>
                 </div>
               )}
@@ -1490,7 +1384,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
             </Badge>
           )}
         </div>
-        <div className="text-xs text-muted-foreground/70">ModderSheet v5.1 - JamolStroy Admin Panel</div>
+        <div className="text-xs text-muted-foreground/70">ModderSheet v5.0 - JamolStroy Admin Panel</div>
       </div>
     </div>
   )
