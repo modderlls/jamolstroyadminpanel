@@ -1,7 +1,19 @@
 "use client"
 
 import type * as React from "react"
-import { Home, Package, ShoppingCart, LogOut, BarChart3, Users, Settings, FolderTree, Calendar } from "lucide-react"
+import {
+  Home,
+  Package,
+  ShoppingCart,
+  LogOut,
+  BarChart3,
+  Users,
+  Settings,
+  FolderTree,
+  Calendar,
+  Wrench,
+  HardDrive,
+} from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
@@ -114,6 +126,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         title: "Kategoriyalar",
         url: "/categories",
         icon: FolderTree,
+      },
+      {
+        title: "Ustalar",
+        url: "/workers",
+        icon: Wrench,
+      },
+      {
+        title: "Xotiralar",
+        url: "/storage",
+        icon: HardDrive,
       },
       {
         title: "Sozlamalar",
