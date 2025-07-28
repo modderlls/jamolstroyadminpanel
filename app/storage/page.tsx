@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import { supabase } from "@/lib/supabase"
 import {
   HardDrive,
@@ -24,6 +25,9 @@ import {
   RefreshCw,
   Eye,
   Download,
+  User,
+  ImageIcon,
+  Users,
 } from "lucide-react"
 
 interface StorageFile {
@@ -32,6 +36,22 @@ interface StorageFile {
   created_at?: string
   updated_at?: string
   id?: string
+}
+
+interface GoogleDriveStorage {
+  total: number
+  used: number
+  free: number
+  totalGB: string
+  usedGB: string
+  freeGB: string
+  usagePercentage: string
+}
+
+interface SupabaseStorage {
+  totalSize: number
+  fileCount: number
+  buckets: string[]
 }
 
 export default function StoragePage() {
@@ -43,9 +63,18 @@ export default function StoragePage() {
   const [settingsError, setSettingsError] = useState("")
   const [settingsLoading, setSettingsLoading] = useState(false)
   const [settingsVerified, setSettingsVerified] = useState(false)
-  const [storageProvider, setStorageProvider] = useState<"supabase" | "google_drive">("supabase")
-  const [googleDriveFolderId, setGoogleDriveFolderId] = useState("")
   const [savingSettings, setSavingSettings] = useState(false)
+
+  // Storage providers
+  const [currentProvider, setCurrentProvider] = useState<"supabase" | "google_drive">("supabase")
+  const [productStorageProvider, setProductStorageProvider] = useState<"supabase" | "google_drive">("supabase")
+  const [workerStorageProvider, setWorkerStorageProvider] = useState<"supabase" | "google_drive">("supabase")
+
+  // Google Drive OAuth
+  const [googleAccessToken, setGoogleAccessToken] = useState<string>("")
+  const [googleUser, setGoogleUser] = useState<any>(null)
+  const [googleDriveStorage, setGoogleDriveStorage] = useState<GoogleDriveStorage | null>(null)
+  const [supabaseStorage, setSupabaseStorage] = useState<SupabaseStorage | null>(null)
 
   // MD Password protection for viewing files
   const [viewPassword, setViewPassword] = useState("")
@@ -55,24 +84,34 @@ export default function StoragePage() {
 
   useEffect(() => {
     loadStorageSettings()
+    loadGoogleTokens()
   }, [])
 
   useEffect(() => {
     if (viewVerified) {
+      fetchStorageInfo()
       fetchFiles()
     }
-  }, [viewVerified, storageProvider])
+  }, [viewVerified, currentProvider])
 
   const loadStorageSettings = () => {
     const saved = localStorage.getItem("storage_settings")
     if (saved) {
       try {
         const settings = JSON.parse(saved)
-        setStorageProvider(settings.storage_provider || "supabase")
-        setGoogleDriveFolderId(settings.google_drive_folder_id || "")
+        setCurrentProvider(settings.current_provider || "supabase")
+        setProductStorageProvider(settings.product_storage_provider || "supabase")
+        setWorkerStorageProvider(settings.worker_storage_provider || "supabase")
       } catch (error) {
         console.error("Error loading storage settings:", error)
       }
+    }
+  }
+
+  const loadGoogleTokens = () => {
+    const accessToken = localStorage.getItem("google_access_token")
+    if (accessToken) {
+      setGoogleAccessToken(accessToken)
     }
   }
 
@@ -108,12 +147,99 @@ export default function StoragePage() {
     }
   }
 
+  const authenticateGoogleDrive = async () => {
+    try {
+      const response = await fetch("/api/google-drive/auth")
+      const data = await response.json()
+
+      if (data.authUrl) {
+        // Open Google OAuth in popup
+        const popup = window.open(data.authUrl, "google-auth", "width=500,height=600")
+
+        // Listen for popup close
+        const checkClosed = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(checkClosed)
+            // Check if tokens were stored
+            const accessToken = localStorage.getItem("google_access_token")
+            if (accessToken) {
+              setGoogleAccessToken(accessToken)
+              fetchGoogleDriveInfo()
+            }
+          }
+        }, 1000)
+      }
+    } catch (error) {
+      console.error("Error authenticating Google Drive:", error)
+      alert("Google Drive autentifikatsiyasida xatolik")
+    }
+  }
+
+  const fetchStorageInfo = async () => {
+    try {
+      // Fetch Supabase storage info
+      const { data: buckets } = await supabase.storage.listBuckets()
+      let totalSize = 0
+      let fileCount = 0
+
+      if (buckets) {
+        for (const bucket of buckets) {
+          const { data: files } = await supabase.storage.from(bucket.name).list()
+          if (files) {
+            fileCount += files.length
+            files.forEach((file) => {
+              totalSize += file.metadata?.size || 0
+            })
+          }
+        }
+      }
+
+      setSupabaseStorage({
+        totalSize,
+        fileCount,
+        buckets: buckets?.map((b) => b.name) || [],
+      })
+
+      // Fetch Google Drive info if authenticated
+      if (googleAccessToken) {
+        await fetchGoogleDriveInfo()
+      }
+    } catch (error) {
+      console.error("Error fetching storage info:", error)
+    }
+  }
+
+  const fetchGoogleDriveInfo = async () => {
+    if (!googleAccessToken) return
+
+    try {
+      const response = await fetch("/api/google-drive/storage-info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken: googleAccessToken }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setGoogleDriveStorage(data.storage)
+        setGoogleUser(data.user)
+      }
+    } catch (error) {
+      console.error("Error fetching Google Drive info:", error)
+    }
+  }
+
   const fetchFiles = async () => {
     try {
       setLoading(true)
 
-      if (storageProvider === "google_drive") {
-        const response = await fetch("/api/google-drive/files")
+      if (currentProvider === "google_drive" && googleAccessToken) {
+        const response = await fetch("/api/google-drive/files-oauth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accessToken: googleAccessToken }),
+        })
         const data = await response.json()
         setFiles(data.files || [])
       } else {
@@ -166,8 +292,9 @@ export default function StoragePage() {
     setSavingSettings(true)
     try {
       const newSettings = {
-        storage_provider: storageProvider,
-        google_drive_folder_id: googleDriveFolderId,
+        current_provider: currentProvider,
+        product_storage_provider: productStorageProvider,
+        worker_storage_provider: workerStorageProvider,
         updated_at: new Date().toISOString(),
       }
 
@@ -194,11 +321,12 @@ export default function StoragePage() {
     setUploading(true)
     try {
       for (const file of Array.from(files)) {
-        if (storageProvider === "google_drive") {
+        if (currentProvider === "google_drive" && googleAccessToken) {
           const formData = new FormData()
           formData.append("file", file)
+          formData.append("accessToken", googleAccessToken)
 
-          const response = await fetch("/api/google-drive/upload", {
+          const response = await fetch("/api/google-drive/upload-oauth", {
             method: "POST",
             body: formData,
           })
@@ -219,6 +347,7 @@ export default function StoragePage() {
       }
 
       await fetchFiles()
+      await fetchStorageInfo()
       alert("Fayllar muvaffaqiyatli yuklandi!")
     } catch (error) {
       console.error("Error uploading files:", error)
@@ -232,7 +361,7 @@ export default function StoragePage() {
     if (!confirm("Bu faylni o'chirishni tasdiqlaysizmi?")) return
 
     try {
-      if (storageProvider === "google_drive") {
+      if (currentProvider === "google_drive") {
         alert("Google Drive fayllarini o'chirish hozircha qo'llab-quvvatlanmaydi")
         return
       } else {
@@ -242,6 +371,7 @@ export default function StoragePage() {
       }
 
       await fetchFiles()
+      await fetchStorageInfo()
       alert("Fayl muvaffaqiyatli o'chirildi!")
     } catch (error) {
       console.error("Error deleting file:", error)
@@ -250,7 +380,7 @@ export default function StoragePage() {
   }
 
   const getFileUrl = (fileName: string) => {
-    if (storageProvider === "google_drive") {
+    if (currentProvider === "google_drive") {
       return "#" // Google Drive URLs would be handled differently
     } else {
       const { data } = supabase.storage.from("products").getPublicUrl(fileName)
@@ -338,25 +468,134 @@ export default function StoragePage() {
         </div>
       </div>
 
-      {/* Storage Provider Info */}
+      {/* Storage Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Supabase Storage */}
+        <Card className="ios-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5 text-green-600" />
+              Supabase Storage
+            </CardTitle>
+            <CardDescription>Mahalliy xotira ma'lumotlari</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {supabaseStorage ? (
+              <>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Jami fayllar:</span>
+                    <span className="font-medium">{supabaseStorage.fileCount} ta</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Jami hajm:</span>
+                    <span className="font-medium">{(supabaseStorage.totalSize / (1024 * 1024)).toFixed(2)} MB</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Bucketlar:</span>
+                    <span className="font-medium">{supabaseStorage.buckets.length} ta</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Bucketlar ro'yxati:</div>
+                  <div className="flex flex-wrap gap-1">
+                    {supabaseStorage.buckets.map((bucket) => (
+                      <Badge key={bucket} variant="outline" className="text-xs">
+                        {bucket}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Ma'lumotlar yuklanmoqda...</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Google Drive Storage */}
+        <Card className="ios-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cloud className="h-5 w-5 text-blue-600" />
+              Google Drive
+            </CardTitle>
+            <CardDescription>Bulutli xotira ma'lumotlari</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!googleAccessToken ? (
+              <div className="text-center py-4">
+                <Cloud className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <p className="text-sm text-muted-foreground mb-4">Google Drive bilan bog'lanmagan</p>
+                <Button onClick={authenticateGoogleDrive} className="ios-button">
+                  <Cloud className="h-4 w-4 mr-2" />
+                  Google Drive bilan bog'lanish
+                </Button>
+              </div>
+            ) : googleDriveStorage ? (
+              <>
+                {googleUser && (
+                  <div className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg">
+                    <User className="h-4 w-4" />
+                    <span className="text-sm">{googleUser.displayName || googleUser.emailAddress}</span>
+                  </div>
+                )}
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Jami hajm:</span>
+                      <span className="font-medium">{googleDriveStorage.totalGB} GB</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Ishlatilgan:</span>
+                      <span className="font-medium">{googleDriveStorage.usedGB} GB</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Bo'sh:</span>
+                      <span className="font-medium">{googleDriveStorage.freeGB} GB</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span>Ishlatilish:</span>
+                      <span>{googleDriveStorage.usagePercentage}%</span>
+                    </div>
+                    <Progress value={Number.parseFloat(googleDriveStorage.usagePercentage)} className="h-2" />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Ma'lumotlar yuklanmoqda...</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Current Storage Provider */}
       <Card className="ios-card">
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {storageProvider === "google_drive" ? (
+              {currentProvider === "google_drive" ? (
                 <Cloud className="h-8 w-8 text-blue-600" />
               ) : (
                 <Database className="h-8 w-8 text-green-600" />
               )}
               <div>
                 <h3 className="font-semibold">
-                  {storageProvider === "google_drive" ? "Google Drive" : "Supabase Storage"}
+                  {currentProvider === "google_drive" ? "Google Drive" : "Supabase Storage"}
                 </h3>
-                <p className="text-sm text-muted-foreground">Hozirgi xotira provayderi</p>
+                <p className="text-sm text-muted-foreground">Hozirgi fayl yuklash provayderi</p>
               </div>
             </div>
-            <Badge variant={storageProvider === "google_drive" ? "default" : "secondary"}>
-              {storageProvider === "google_drive" ? "Bulutli" : "Mahalliy"}
+            <Badge variant={currentProvider === "google_drive" ? "default" : "secondary"}>
+              {currentProvider === "google_drive" ? "Bulutli" : "Mahalliy"}
             </Badge>
           </div>
         </CardContent>
@@ -366,7 +605,9 @@ export default function StoragePage() {
       <Card className="ios-card">
         <CardHeader>
           <CardTitle>Fayl yuklash</CardTitle>
-          <CardDescription>Mahsulot rasmlari va boshqa fayllarni yuklang</CardDescription>
+          <CardDescription>
+            {currentProvider === "google_drive" ? "Google Drive" : "Supabase Storage"} ga fayllarni yuklang
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="border-2 border-dashed border-border rounded-lg p-8">
@@ -376,7 +617,7 @@ export default function StoragePage() {
               onChange={handleFileUpload}
               className="hidden"
               id="file-upload"
-              disabled={uploading}
+              disabled={uploading || (currentProvider === "google_drive" && !googleAccessToken)}
             />
             <label htmlFor="file-upload" className="flex flex-col items-center justify-center cursor-pointer">
               {uploading ? (
@@ -385,7 +626,11 @@ export default function StoragePage() {
                 <Upload className="h-12 w-12 text-muted-foreground" />
               )}
               <p className="text-lg font-medium mt-4">
-                {uploading ? "Yuklanmoqda..." : "Fayllarni yuklash uchun bosing"}
+                {uploading
+                  ? "Yuklanmoqda..."
+                  : currentProvider === "google_drive" && !googleAccessToken
+                    ? "Google Drive bilan bog'laning"
+                    : "Fayllarni yuklash uchun bosing"}
               </p>
               <p className="text-sm text-muted-foreground">Yoki fayllarni bu yerga sudrab olib keling</p>
             </label>
@@ -398,7 +643,7 @@ export default function StoragePage() {
         <CardHeader>
           <CardTitle>Yuklangan fayllar</CardTitle>
           <CardDescription>
-            {storageProvider === "google_drive" ? "Google Drive" : "Supabase Storage"} dagi fayllar
+            {currentProvider === "google_drive" ? "Google Drive" : "Supabase Storage"} dagi fayllar
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -434,7 +679,7 @@ export default function StoragePage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {storageProvider === "supabase" && (
+                    {currentProvider === "supabase" && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -477,13 +722,13 @@ export default function StoragePage() {
       {/* Settings Dialog */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-2xl mx-4 ios-card">
+          <Card className="w-full max-w-3xl mx-4 ios-card max-h-[90vh] overflow-y-auto">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5" />
                 Xotira sozlamalari
               </CardTitle>
-              <CardDescription>Mahsulot rasmlarini saqlash joyini o'zgartiring (MD parol himoyasi)</CardDescription>
+              <CardDescription>Fayllarni saqlash joyini sozlang (MD parol himoyasi)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {!settingsVerified ? (
@@ -536,14 +781,15 @@ export default function StoragePage() {
                 </div>
               ) : (
                 <div className="space-y-6">
+                  {/* Current Provider */}
                   <div className="space-y-4">
-                    <Label>Xotira provayderi</Label>
+                    <Label>Hozirgi fayl yuklash provayderi</Label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <Card
                         className={`cursor-pointer transition-all ${
-                          storageProvider === "supabase" ? "ring-2 ring-primary" : "hover:shadow-md"
+                          currentProvider === "supabase" ? "ring-2 ring-primary" : "hover:shadow-md"
                         }`}
-                        onClick={() => setStorageProvider("supabase")}
+                        onClick={() => setCurrentProvider("supabase")}
                       >
                         <CardContent className="p-4 text-center">
                           <Database className="h-8 w-8 mx-auto mb-2 text-green-600" />
@@ -554,29 +800,97 @@ export default function StoragePage() {
 
                       <Card
                         className={`cursor-pointer transition-all ${
-                          storageProvider === "google_drive" ? "ring-2 ring-primary" : "hover:shadow-md"
+                          currentProvider === "google_drive" ? "ring-2 ring-primary" : "hover:shadow-md"
                         }`}
-                        onClick={() => setStorageProvider("google_drive")}
+                        onClick={() => setCurrentProvider("google_drive")}
                       >
                         <CardContent className="p-4 text-center">
                           <Cloud className="h-8 w-8 mx-auto mb-2 text-blue-600" />
                           <h4 className="font-medium">Google Drive</h4>
                           <p className="text-sm text-muted-foreground">Bulutli xotira</p>
+                          {!googleAccessToken && (
+                            <Badge variant="outline" className="mt-2 text-xs">
+                              Bog'lanmagan
+                            </Badge>
+                          )}
                         </CardContent>
                       </Card>
                     </div>
                   </div>
 
-                  {storageProvider === "google_drive" && (
+                  {/* Specific Storage Settings */}
+                  <div className="space-y-4">
+                    <Label>Maxsus xotira sozlamalari</Label>
+
+                    {/* Product Storage */}
                     <div className="space-y-2">
-                      <Label htmlFor="folder_id">Google Drive papka ID (ixtiyoriy)</Label>
-                      <Input
-                        id="folder_id"
-                        value={googleDriveFolderId}
-                        onChange={(e) => setGoogleDriveFolderId(e.target.value)}
-                        placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
-                      />
-                      <p className="text-xs text-muted-foreground">Bo'sh qoldirsa, asosiy papkaga saqlanadi</p>
+                      <Label className="flex items-center gap-2">
+                        <ImageIcon className="h-4 w-4" />
+                        Mahsulot rasmlari uchun
+                      </Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          variant={productStorageProvider === "supabase" ? "default" : "outline"}
+                          onClick={() => setProductStorageProvider("supabase")}
+                          className="ios-button"
+                        >
+                          <Database className="h-4 w-4 mr-2" />
+                          Supabase
+                        </Button>
+                        <Button
+                          variant={productStorageProvider === "google_drive" ? "default" : "outline"}
+                          onClick={() => setProductStorageProvider("google_drive")}
+                          className="ios-button"
+                          disabled={!googleAccessToken}
+                        >
+                          <Cloud className="h-4 w-4 mr-2" />
+                          Google Drive
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Worker Storage */}
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        Ishchilar ma'lumotlari uchun
+                      </Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          variant={workerStorageProvider === "supabase" ? "default" : "outline"}
+                          onClick={() => setWorkerStorageProvider("supabase")}
+                          className="ios-button"
+                        >
+                          <Database className="h-4 w-4 mr-2" />
+                          Supabase
+                        </Button>
+                        <Button
+                          variant={workerStorageProvider === "google_drive" ? "default" : "outline"}
+                          onClick={() => setWorkerStorageProvider("google_drive")}
+                          className="ios-button"
+                          disabled={!googleAccessToken}
+                        >
+                          <Cloud className="h-4 w-4 mr-2" />
+                          Google Drive
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Google Drive Authentication */}
+                  {!googleAccessToken && (
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200 mb-3">
+                        <Cloud className="h-4 w-4" />
+                        <span className="font-medium">Google Drive bog'lanishi</span>
+                      </div>
+                      <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+                        Google Drive xususiyatlaridan foydalanish uchun OAuth orqali autentifikatsiya qiling
+                      </p>
+                      <Button onClick={authenticateGoogleDrive} className="ios-button">
+                        <Cloud className="h-4 w-4 mr-2" />
+                        Google Drive bilan bog'lanish
+                      </Button>
                     </div>
                   )}
 
@@ -586,10 +900,10 @@ export default function StoragePage() {
                       <span className="font-medium">Muhim eslatma</span>
                     </div>
                     <ul className="text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
-                      <li>• Bu sozlama faqat mahsulot rasmlariga ta'sir qiladi</li>
-                      <li>• Mavjud rasmlar o'z joyida qoladi</li>
-                      <li>• Yangi yuklangan rasmlar tanlangan joyga saqlanadi</li>
-                      <li>• Google Drive uchun API kalitlari sozlangan bo'lishi kerak</li>
+                      <li>• Mavjud fayllar o'z joyida qoladi</li>
+                      <li>• Yangi yuklangan fayllar tanlangan provayderga saqlanadi</li>
+                      <li>• Google Drive uchun OAuth autentifikatsiya talab qilinadi</li>
+                      <li>• Har bir fayl turi uchun alohida provayder tanlash mumkin</li>
                     </ul>
                   </div>
                 </div>

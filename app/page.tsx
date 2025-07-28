@@ -4,7 +4,18 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
-import { Package, TrendingUp, Users, ShoppingCart, Eye, Star } from "lucide-react"
+import {
+  Package,
+  TrendingUp,
+  Users,
+  ShoppingCart,
+  Eye,
+  Star,
+  Briefcase,
+  Clock,
+  CheckCircle,
+  XCircle,
+} from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 interface DashboardStats {
@@ -12,6 +23,10 @@ interface DashboardStats {
   totalCategories: number
   totalOrders: number
   totalUsers: number
+  totalWorkers: number
+  todayOrders: number
+  completedOrders: number
+  pendingOrders: number
   productsByCategory: Array<{ name: string; count: number }>
   ordersByMonth: Array<{ month: string; orders: number; revenue: number }>
   topProducts: Array<{ name: string; views: number; rating: number }>
@@ -25,6 +40,10 @@ export default function Dashboard() {
     totalCategories: 0,
     totalOrders: 0,
     totalUsers: 0,
+    totalWorkers: 0,
+    todayOrders: 0,
+    completedOrders: 0,
+    pendingOrders: 0,
     productsByCategory: [],
     ordersByMonth: [],
     topProducts: [],
@@ -38,12 +57,33 @@ export default function Dashboard() {
   const fetchDashboardStats = async () => {
     try {
       // Fetch basic counts
-      const [productsRes, categoriesRes, ordersRes, usersRes] = await Promise.all([
+      const [productsRes, categoriesRes, ordersRes, usersRes, workersRes] = await Promise.all([
         supabase.from("products").select("id", { count: "exact" }),
         supabase.from("categories").select("id", { count: "exact" }),
         supabase.from("orders").select("id", { count: "exact" }),
         supabase.from("users").select("id", { count: "exact" }),
+        supabase.from("workers").select("id", { count: "exact" }),
       ])
+
+      // Fetch today's orders
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+
+      const { data: todayOrdersData } = await supabase
+        .from("orders")
+        .select("id, status")
+        .gte("created_at", today.toISOString())
+        .lt("created_at", tomorrow.toISOString())
+
+      // Fetch completed and pending orders
+      const { data: completedOrdersData } = await supabase.from("orders").select("id").eq("status", "delivered")
+
+      const { data: pendingOrdersData } = await supabase
+        .from("orders")
+        .select("id")
+        .in("status", ["pending", "confirmed", "processing"])
 
       // Fetch products by category
       const { data: categoryData } = await supabase.from("products").select(`
@@ -106,6 +146,10 @@ export default function Dashboard() {
         totalCategories: categoriesRes.count || 0,
         totalOrders: ordersRes.count || 0,
         totalUsers: usersRes.count || 0,
+        totalWorkers: workersRes.count || 0,
+        todayOrders: todayOrdersData?.length || 0,
+        completedOrders: completedOrdersData?.length || 0,
+        pendingOrders: pendingOrdersData?.length || 0,
         productsByCategory,
         ordersByMonth: monthlyStats,
         topProducts,
@@ -121,7 +165,7 @@ export default function Dashboard() {
     return (
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
+          {[...Array(8)].map((_, i) => (
             <Card key={i} className="ios-card animate-pulse">
               <CardContent className="p-6">
                 <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
@@ -196,6 +240,62 @@ export default function Dashboard() {
               </div>
               <div className="w-12 h-12 bg-muted rounded-xl flex items-center justify-center">
                 <Users className="h-6 w-6 text-muted-foreground" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="ios-card ios-button hover:scale-105 transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Jami ishchilar</p>
+                <p className="text-2xl font-bold text-foreground">{stats.totalWorkers}</p>
+              </div>
+              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
+                <Briefcase className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="ios-card ios-button hover:scale-105 transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Bugungi buyurtmalar</p>
+                <p className="text-2xl font-bold text-foreground">{stats.todayOrders}</p>
+              </div>
+              <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
+                <Clock className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="ios-card ios-button hover:scale-105 transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Bajarilgan</p>
+                <p className="text-2xl font-bold text-foreground">{stats.completedOrders}</p>
+              </div>
+              <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center">
+                <CheckCircle className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="ios-card ios-button hover:scale-105 transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Bajarilmagan</p>
+                <p className="text-2xl font-bold text-foreground">{stats.pendingOrders}</p>
+              </div>
+              <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center">
+                <XCircle className="h-6 w-6 text-white" />
               </div>
             </div>
           </CardContent>

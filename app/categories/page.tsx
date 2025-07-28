@@ -106,7 +106,7 @@ export default function CategoriesPage() {
           {
             name_uz: newCategoryName.trim(),
             name_ru: newCategoryNameRu.trim() || newCategoryName.trim(),
-            parent_id: selectedParent || null,
+            parent_id: selectedParent || null, // null instead of empty string
           },
         ])
         .select()
@@ -137,7 +137,7 @@ export default function CategoriesPage() {
         .update({
           name_uz: newCategoryName.trim(),
           name_ru: newCategoryNameRu.trim() || newCategoryName.trim(),
-          parent_id: selectedParent || null,
+          parent_id: selectedParent || null, // null instead of empty string
           updated_at: new Date().toISOString(),
         })
         .eq("id", editingCategory.id)

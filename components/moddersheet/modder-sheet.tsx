@@ -286,7 +286,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
 
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [hasChanges, currentCell, editingCell, sortedData?.length, hiddenColumns, getVisibleColumns])
+  }, [hasChanges, currentCell, editingCell, sortedData?.length, hiddenColumns])
 
   // Define visible columns based on table
   const getVisibleColumns = () => {
@@ -398,6 +398,10 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
         { key: "rating", label: "Reyting", type: "number" },
         { key: "is_available", label: "Mavjud", type: "boolean" },
         { key: "location", label: "Manzil", type: "text" },
+        { key: "passport_series", label: "Passport seriya", type: "text" },
+        { key: "passport_number", label: "Passport raqam", type: "text" },
+        { key: "birth_date", label: "Tug'ilgan sana", type: "date" },
+        { key: "passport_image", label: "Passport rasmi", type: "image" },
         { key: "created_at", label: "Yaratilgan", type: "datetime" },
       ]
     } else if (tableName === "ads") {
@@ -699,6 +703,10 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
       newRow.rating = 0
       newRow.is_available = true
       newRow.location = ""
+      newRow.passport_series = ""
+      newRow.passport_number = ""
+      newRow.birth_date = ""
+      newRow.passport_image = ""
     } else if (tableName === "ads") {
       newRow.name = ""
       newRow.image_url = ""
