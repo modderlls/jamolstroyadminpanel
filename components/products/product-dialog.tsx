@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Upload, X, Camera, Plus, Trash2 } from "lucide-react"
+import { Upload, X, Camera, Plus, Trash2, StopCircle } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import Image from "next/image"
 import { CategorySelector } from "@/components/categories/category-selector"
@@ -70,6 +70,10 @@ export function ProductDialog({
   const [loading, setLoading] = useState(false)
   const [uploadingImages, setUploadingImages] = useState(false)
   const [useCamera, setUseCamera] = useState(false)
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
+  const [showCameraPreview, setShowCameraPreview] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const [formData, setFormData] = useState({
     name_uz: "",
@@ -133,6 +137,13 @@ export function ProductDialog({
     }
   }, [product])
 
+  // Cleanup camera stream when dialog closes
+  useEffect(() => {
+    if (!open && cameraStream) {
+      stopCamera()
+    }
+  }, [open, cameraStream])
+
   const getStorageProvider = () => {
     const settings = localStorage.getItem("storage_settings")
     if (settings) {
@@ -146,43 +157,64 @@ export function ProductDialog({
     return "supabase"
   }
 
-  const handleCameraCapture = async () => {
+  const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      })
-
-      const video = document.createElement("video")
-      video.srcObject = stream
-      video.play()
-
-      await new Promise((resolve) => {
-        video.onloadedmetadata = resolve
-      })
-
-      const canvas = document.createElement("canvas")
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-
-      const context = canvas.getContext("2d")
-      context?.drawImage(video, 0, 0)
-
-      stream.getTracks().forEach((track) => track.stop())
-
-      canvas.toBlob(
-        async (blob) => {
-          if (blob) {
-            const file = new File([blob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" })
-            await uploadSingleImage(file)
-          }
+        video: {
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
-        "image/jpeg",
-        0.8,
-      )
+      })
+
+      setCameraStream(stream)
+      setShowCameraPreview(true)
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play()
+      }
     } catch (error) {
       console.error("Camera error:", error)
       toast.error("Kameraga kirish xatoligi")
     }
+  }
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop())
+      setCameraStream(null)
+      setShowCameraPreview(false)
+    }
+  }
+
+  const capturePhoto = async () => {
+    if (!videoRef.current || !canvasRef.current) return
+
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const context = canvas.getContext("2d")
+
+    if (!context) return
+
+    // Set canvas dimensions to match video
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+
+    // Draw video frame to canvas
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+    // Convert canvas to blob
+    canvas.toBlob(
+      async (blob) => {
+        if (blob) {
+          const file = new File([blob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" })
+          await uploadSingleImage(file)
+        }
+      },
+      "image/jpeg",
+      0.8,
+    )
   }
 
   const uploadSingleImage = async (file: File) => {
@@ -194,7 +226,6 @@ export function ProductDialog({
       if (storageProvider === "r2") {
         const formData = new FormData()
         formData.append("file", file)
-        formData.append("bucketType", "products")
 
         const response = await fetch("/api/r2/upload", {
           method: "POST",
@@ -249,7 +280,6 @@ export function ProductDialog({
         if (storageProvider === "r2") {
           const formData = new FormData()
           formData.append("file", file)
-          formData.append("bucketType", "products")
 
           const response = await fetch("/api/r2/upload", {
             method: "POST",
@@ -405,15 +435,48 @@ export function ProductDialog({
             <CardContent className="space-y-4">
               {/* Camera/Upload Toggle */}
               <div className="flex items-center space-x-2">
-                <Switch id="camera-mode" checked={useCamera} onCheckedChange={setUseCamera} />
+                <Switch
+                  id="camera-mode"
+                  checked={useCamera}
+                  onCheckedChange={(checked) => {
+                    setUseCamera(checked)
+                    if (!checked) {
+                      stopCamera()
+                    }
+                  }}
+                />
                 <Label htmlFor="camera-mode">Kamera rejimi</Label>
               </div>
 
               {useCamera ? (
-                <Button type="button" onClick={handleCameraCapture} disabled={uploadingImages} className="w-full">
-                  <Camera className="h-4 w-4 mr-2" />
-                  {uploadingImages ? "Yuklanmoqda..." : "Rasmga olish"}
-                </Button>
+                <div className="space-y-4">
+                  {!showCameraPreview ? (
+                    <Button type="button" onClick={startCamera} disabled={uploadingImages} className="w-full">
+                      <Camera className="h-4 w-4 mr-2" />
+                      Kamerani yoqish
+                    </Button>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Camera Preview */}
+                      <div className="relative bg-black rounded-lg overflow-hidden">
+                        <video ref={videoRef} autoPlay playsInline muted className="w-full h-64 object-cover" />
+                        <canvas ref={canvasRef} className="hidden" />
+                      </div>
+
+                      {/* Camera Controls */}
+                      <div className="flex gap-2">
+                        <Button type="button" onClick={capturePhoto} disabled={uploadingImages} className="flex-1">
+                          <Camera className="h-4 w-4 mr-2" />
+                          {uploadingImages ? "Yuklanmoqda..." : "Rasmga olish"}
+                        </Button>
+                        <Button type="button" variant="outline" onClick={stopCamera}>
+                          <StopCircle className="h-4 w-4 mr-2" />
+                          To'xtatish
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
                   <input
