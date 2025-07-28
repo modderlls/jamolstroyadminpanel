@@ -2,14 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -56,11 +49,10 @@ interface WorkerDialogProps {
   worker?: Worker
   onSaved: () => void
   onClose: () => void
-  trigger?: React.ReactNode
+  open: boolean
 }
 
-export function WorkerDialog({ worker, onSaved, onClose, trigger }: WorkerDialogProps) {
-  const [open, setOpen] = useState(false)
+export function WorkerDialog({ worker, onSaved, onClose, open }: WorkerDialogProps) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadingPassport, setUploadingPassport] = useState(false)
@@ -331,7 +323,6 @@ export function WorkerDialog({ worker, onSaved, onClose, trigger }: WorkerDialog
 
       toast.success(worker ? "Ishchi yangilandi" : "Ishchi qo'shildi")
       onSaved()
-      setOpen(false)
       onClose()
     } catch (error) {
       console.error("Error saving worker:", error)
@@ -342,15 +333,7 @@ export function WorkerDialog({ worker, onSaved, onClose, trigger }: WorkerDialog
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <Button className="ios-button">
-            <Plus className="h-4 w-4 mr-2" />
-            Yangi ishchi
-          </Button>
-        )}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -711,14 +694,7 @@ export function WorkerDialog({ worker, onSaved, onClose, trigger }: WorkerDialog
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-2 pt-4 border-t">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setOpen(false)
-              onClose()
-            }}
-            className="ios-button bg-transparent"
-          >
+          <Button variant="outline" onClick={onClose} className="ios-button bg-transparent">
             Bekor qilish
           </Button>
           <Button onClick={handleSave} disabled={loading} className="ios-button">

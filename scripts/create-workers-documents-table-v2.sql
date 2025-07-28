@@ -14,8 +14,7 @@ CREATE TABLE IF NOT EXISTS public.workers_documents (
 ) TABLESPACE pg_default;
 
 -- Create index
-CREATE INDEX IF NOT EXISTS idx_workers_documents_worker_id 
-ON public.workers_documents USING btree (worker_id) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_workers_documents_worker_id ON public.workers_documents USING btree (worker_id) TABLESPACE pg_default;
 
 -- Create trigger for updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -31,20 +30,47 @@ BEFORE UPDATE ON workers_documents
 FOR EACH ROW 
 EXECUTE FUNCTION update_updated_at_column();
 
--- Create storage bucket for documents if not exists
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('documents', 'documents', true)
+-- Create documents bucket if not exists
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('documents', 'documents', false)
 ON CONFLICT (id) DO NOTHING;
 
--- Set up storage policies for documents bucket
-CREATE POLICY "Allow public read access on documents" ON storage.objects
-FOR SELECT USING (bucket_id = 'documents');
+-- RLS policies for documents bucket - only admin users can access
+CREATE POLICY "Only admin users can view documents" ON storage.objects 
+FOR SELECT USING (
+  bucket_id = 'documents' AND 
+  EXISTS (
+    SELECT 1 FROM public.users 
+    WHERE users.id = auth.uid() AND users.role = 'admin'
+  )
+);
 
-CREATE POLICY "Allow authenticated users to upload documents" ON storage.objects
-FOR INSERT WITH CHECK (bucket_id = 'documents');
+CREATE POLICY "Only admin users can upload documents" ON storage.objects 
+FOR INSERT WITH CHECK (
+  bucket_id = 'documents' AND 
+  EXISTS (
+    SELECT 1 FROM public.users 
+    WHERE users.id = auth.uid() AND users.role = 'admin'
+  )
+);
 
-CREATE POLICY "Allow authenticated users to update documents" ON storage.objects
-FOR UPDATE USING (bucket_id = 'documents');
+CREATE POLICY "Only admin users can update documents" ON storage.objects 
+FOR UPDATE USING (
+  bucket_id = 'documents' AND 
+  EXISTS (
+    SELECT 1 FROM public.users 
+    WHERE users.id = auth.uid() AND users.role = 'admin'
+  )
+);
 
-CREATE POLICY "Allow authenticated users to delete documents" ON storage.objects
-FOR DELETE USING (bucket_id = 'documents');
+CREATE POLICY "Only admin users can delete documents" ON storage.objects 
+FOR DELETE USING (
+  bucket_id = 'documents' AND 
+  EXISTS (
+    SELECT 1 FROM public.users 
+    WHERE users.id = auth.uid() AND users.role = 'admin'
+  )
+);
+
+-- Enable RLS on storage.objects if not already enabled
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;

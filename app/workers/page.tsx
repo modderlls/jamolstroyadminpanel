@@ -345,16 +345,15 @@ export default function WorkersPage() {
       </Tabs>
 
       {/* Worker Dialog */}
-      {showWorkerDialog && (
-        <WorkerDialog
-          worker={editingWorker}
-          onClose={() => {
-            setShowWorkerDialog(false)
-            setEditingWorker(null)
-          }}
-          onSaved={handleWorkerSaved}
-        />
-      )}
+      <WorkerDialog
+        worker={editingWorker}
+        onSaved={handleWorkerSaved}
+        onClose={() => {
+          setShowWorkerDialog(false)
+          setEditingWorker(null)
+        }}
+        open={showWorkerDialog}
+      />
 
       {/* Worker View Dialog */}
       {showViewDialog && selectedWorker && (

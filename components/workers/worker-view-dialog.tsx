@@ -7,7 +7,20 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase } from "@/lib/supabase"
-import { User, Phone, MapPin, Briefcase, Clock, Star, Calendar, FileText, ImageIcon } from "lucide-react"
+import {
+  User,
+  Phone,
+  MapPin,
+  Briefcase,
+  Clock,
+  Star,
+  DollarSign,
+  FileText,
+  ImageIcon,
+  Calendar,
+  BadgeIcon as IdCard,
+  Loader2,
+} from "lucide-react"
 import Image from "next/image"
 
 interface Worker {
@@ -46,8 +59,8 @@ interface WorkerViewDialogProps {
 }
 
 export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
-  const [documents, setDocuments] = useState<WorkerDocument | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [documentData, setDocumentData] = useState<WorkerDocument | null>(null)
+  const [loadingDocuments, setLoadingDocuments] = useState(true)
 
   useEffect(() => {
     loadWorkerDocuments()
@@ -55,16 +68,26 @@ export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
 
   const loadWorkerDocuments = async () => {
     try {
-      setLoading(true)
+      setLoadingDocuments(true)
       const { data, error } = await supabase.from("workers_documents").select("*").eq("worker_id", worker.id).single()
 
       if (error && error.code !== "PGRST116") throw error
-      setDocuments(data)
+
+      setDocumentData(data || null)
     } catch (error) {
       console.error("Error loading worker documents:", error)
+      setDocumentData(null)
     } finally {
-      setLoading(false)
+      setLoadingDocuments(false)
     }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("uz-UZ", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })
   }
 
   return (
@@ -78,7 +101,7 @@ export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
           <DialogDescription>Ishchi haqida to'liq ma'lumot</DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="general" className="w-full">
+        <Tabs defaultValue="general" className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="general">Umumiy</TabsTrigger>
             <TabsTrigger value="documents">Hujjatlar</TabsTrigger>
@@ -87,50 +110,59 @@ export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
 
           <TabsContent value="general" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Basic Info */}
+              {/* Basic Information */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Asosiy ma'lumotlar</CardTitle>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Asosiy ma'lumotlar
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">To'liq ism:</span>
                     <span className="font-medium">
                       {worker.first_name} {worker.last_name}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    <span>{worker.profession_uz}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Kasb (O'zbek):</span>
+                    <span className="font-medium">{worker.profession_uz}</span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span>{worker.phone_number}</span>
+                  {worker.profession_ru && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Kasb (Rus):</span>
+                      <span className="font-medium">{worker.profession_ru}</span>
+                    </div>
+                  )}
+
+                  {worker.profession_en && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Kasb (Ingliz):</span>
+                      <span className="font-medium">{worker.profession_en}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <Phone className="h-3 w-3" />
+                      Telefon:
+                    </span>
+                    <span className="font-medium">{worker.phone_number}</span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span>{worker.location}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <MapPin className="h-3 w-3" />
+                      Manzil:
+                    </span>
+                    <span className="font-medium">{worker.location}</span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span>{worker.experience_years} yil tajriba</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                    <span>{worker.rating} reyting</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span>Qo'shilgan: {new Date(worker.created_at).toLocaleDateString("uz-UZ")}</span>
-                  </div>
-
-                  <div className="pt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Holat:</span>
                     <Badge variant={worker.is_available ? "default" : "secondary"}>
                       {worker.is_available ? "Mavjud" : "Band"}
                     </Badge>
@@ -138,129 +170,181 @@ export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
                 </CardContent>
               </Card>
 
-              {/* Professional Info */}
+              {/* Professional Information */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Professional ma'lumotlar</CardTitle>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Briefcase className="h-4 w-4" />
+                    Professional ma'lumotlar
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Soatlik narx:</span>
-                    <span className="font-medium">{worker.hourly_rate.toLocaleString()} so'm</span>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Kunlik narx:</span>
-                    <span className="font-medium">{worker.daily_rate.toLocaleString()} so'm</span>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Tajriba:</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      Tajriba:
+                    </span>
                     <span className="font-medium">{worker.experience_years} yil</span>
                   </div>
 
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Reyting:</span>
-                    <span className="font-medium">{worker.rating}/5</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <Star className="h-3 w-3" />
+                      Reyting:
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                      <span className="font-medium">{worker.rating}</span>
+                    </div>
                   </div>
 
-                  {/* Skills */}
-                  {worker.skills && worker.skills.length > 0 && (
-                    <div className="space-y-2">
-                      <span className="text-sm font-medium text-muted-foreground">Ko'nikmalar:</span>
-                      <div className="flex flex-wrap gap-1">
-                        {worker.skills.map((skill, index) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            {skill}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <DollarSign className="h-3 w-3" />
+                      Soatlik narx:
+                    </span>
+                    <span className="font-medium text-primary">{worker.hourly_rate.toLocaleString()} so'm</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <DollarSign className="h-3 w-3" />
+                      Kunlik narx:
+                    </span>
+                    <span className="font-medium text-primary">{worker.daily_rate.toLocaleString()} so'm</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      Qo'shilgan:
+                    </span>
+                    <span className="font-medium">{formatDate(worker.created_at)}</span>
+                  </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Descriptions */}
-            {(worker.description_uz || worker.description_ru) && (
+            {/* Skills */}
+            {worker.skills && worker.skills.length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Tavsif</CardTitle>
+                  <CardTitle className="text-base">Ko'nikmalar</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {worker.description_uz && (
-                    <div>
-                      <h4 className="font-medium mb-2">O'zbekcha:</h4>
-                      <p className="text-muted-foreground">{worker.description_uz}</p>
-                    </div>
-                  )}
-                  {worker.description_ru && (
-                    <div>
-                      <h4 className="font-medium mb-2">Ruscha:</h4>
-                      <p className="text-muted-foreground">{worker.description_ru}</p>
-                    </div>
-                  )}
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {worker.skills.map((skill, index) => (
+                      <Badge key={index} variant="secondary">
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             )}
+
+            {/* Descriptions */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {worker.description_uz && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Tavsif (O'zbek)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{worker.description_uz}</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {worker.description_ru && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Tavsif (Rus)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{worker.description_ru}</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="documents" className="space-y-6">
-            {loading ? (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Hujjatlar yuklanmoqda...</p>
+            {loadingDocuments ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">Hujjatlar yuklanmoqda...</p>
+                </div>
               </div>
-            ) : documents ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Shaxsiy hujjatlar
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {documents.passport_series && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Passport seriyasi:</span>
-                      <span className="font-medium">{documents.passport_series}</span>
-                    </div>
-                  )}
+            ) : documentData ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Document Information */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <IdCard className="h-4 w-4" />
+                      Passport ma'lumotlari
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {documentData.passport_series && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Seriya:</span>
+                        <span className="font-medium">{documentData.passport_series}</span>
+                      </div>
+                    )}
 
-                  {documents.passport_number && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Passport raqami:</span>
-                      <span className="font-medium">{documents.passport_number}</span>
-                    </div>
-                  )}
+                    {documentData.passport_number && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Raqam:</span>
+                        <span className="font-medium">{documentData.passport_number}</span>
+                      </div>
+                    )}
 
-                  {documents.birth_date && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Tug'ilgan sana:</span>
-                      <span className="font-medium">{new Date(documents.birth_date).toLocaleDateString("uz-UZ")}</span>
-                    </div>
-                  )}
+                    {documentData.birth_date && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Tug'ilgan sana:</span>
+                        <span className="font-medium">{formatDate(documentData.birth_date)}</span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
 
-                  {documents.passport_image_url && (
-                    <div className="space-y-2">
-                      <span className="text-sm font-medium text-muted-foreground">Passport rasmi:</span>
-                      <div className="aspect-video rounded-lg overflow-hidden border max-w-md">
+                {/* Passport Image */}
+                {documentData.passport_image_url && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <ImageIcon className="h-4 w-4" />
+                        Passport rasmi
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="aspect-video rounded-lg overflow-hidden border">
                         <Image
-                          src={documents.passport_image_url || "/placeholder.svg"}
+                          src={documentData.passport_image_url || "/placeholder.svg"}
                           alt="Passport"
                           width={400}
                           height={300}
                           className="object-cover w-full h-full"
                         />
                       </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             ) : (
               <Card>
-                <CardContent className="text-center py-8">
-                  <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <h3 className="text-lg font-medium mb-2">Hujjatlar topilmadi</h3>
+                <CardContent className="p-12 text-center">
+                  <IdCard className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-lg font-semibold mb-2">Hujjatlar topilmadi</h3>
                   <p className="text-muted-foreground">Bu ishchi uchun hujjat ma'lumotlari kiritilmagan</p>
                 </CardContent>
               </Card>
@@ -269,24 +353,28 @@ export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
 
           <TabsContent value="portfolio" className="space-y-6">
             {worker.portfolio_images && worker.portfolio_images.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {worker.portfolio_images.map((image, index) => (
-                  <div key={index} className="aspect-square rounded-lg overflow-hidden border">
-                    <Image
-                      src={image || "/placeholder.svg"}
-                      alt={`Portfolio ${index + 1}`}
-                      width={300}
-                      height={300}
-                      className="object-cover w-full h-full hover:scale-105 transition-transform cursor-pointer"
-                    />
-                  </div>
+                  <Card key={index}>
+                    <CardContent className="p-4">
+                      <div className="aspect-square rounded-lg overflow-hidden border">
+                        <Image
+                          src={image || "/placeholder.svg"}
+                          alt={`Portfolio ${index + 1}`}
+                          width={300}
+                          height={300}
+                          className="object-cover w-full h-full"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             ) : (
               <Card>
-                <CardContent className="text-center py-8">
+                <CardContent className="p-12 text-center">
                   <ImageIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <h3 className="text-lg font-medium mb-2">Portfolio rasmlari yo'q</h3>
+                  <h3 className="text-lg font-semibold mb-2">Portfolio rasmlari topilmadi</h3>
                   <p className="text-muted-foreground">Bu ishchi uchun portfolio rasmlari yuklanmagan</p>
                 </CardContent>
               </Card>
