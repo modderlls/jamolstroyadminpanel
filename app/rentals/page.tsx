@@ -23,7 +23,6 @@ import {
   RotateCcw,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { ModderSheet } from "@/components/moddersheet/modder-sheet"
 import { toast } from "sonner"
 
 interface RentalItem {
@@ -77,6 +76,7 @@ export default function RentalsPage() {
 
   const fetchRentals = async () => {
     try {
+      setLoading(true)
       let query = supabase.from("order_items").select(
         `
           *,
@@ -120,7 +120,8 @@ export default function RentalsPage() {
         query = query.gte("orders.created_at", startDate.toISOString())
       }
 
-      const { data, error } = await query.order("orders.updated_at", { ascending: false })
+      // Fix the ordering issue - use simple column name
+      const { data, error } = await query.order("created_at", { ascending: false })
 
       if (error) throw error
 
@@ -298,10 +299,9 @@ export default function RentalsPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex justify-center">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="current">Joriy</TabsTrigger>
             <TabsTrigger value="returned">Qaytarilgan</TabsTrigger>
-            <TabsTrigger value="table">Jadval</TabsTrigger>
           </TabsList>
         </div>
 
@@ -583,10 +583,6 @@ export default function RentalsPage() {
               </Card>
             )}
           </div>
-        </TabsContent>
-
-        <TabsContent value="table">
-          <ModderSheet data={rentals} onDataChange={setRentals} tableName="rentals" onRefresh={fetchRentals} />
         </TabsContent>
       </Tabs>
 

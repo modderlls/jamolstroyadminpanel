@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ModderSheet } from "@/components/moddersheet/modder-sheet"
-import { WorkerViewDialog } from "@/components/workers/worker-view-dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import { WorkerDialog } from "@/components/workers/worker-dialog"
+import { WorkerViewDialog } from "@/components/workers/worker-view-dialog"
 import { supabase } from "@/lib/supabase"
 import { Users, Plus, Search, Star, MapPin, Phone, Briefcase, Clock, Eye, Edit, Trash2, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 
 interface Worker {
   id: string
@@ -58,6 +60,7 @@ export default function WorkersPage() {
       setWorkers(data || [])
     } catch (error) {
       console.error("Error fetching workers:", error)
+      toast.error("Ustalarni yuklashda xatolik")
     } finally {
       setLoading(false)
     }
@@ -100,6 +103,7 @@ export default function WorkersPage() {
 
       if (error) throw error
 
+      toast.success(`${selectedRows.length} ta usta o'chirildi`)
       await fetchWorkers()
       setSelectedRows([])
       setShowDeleteConfirm(false)
@@ -110,6 +114,11 @@ export default function WorkersPage() {
     } finally {
       setDeleteLoading(false)
     }
+  }
+
+  const handleEditWorker = (worker: Worker) => {
+    setEditingWorker(worker)
+    setShowWorkerDialog(true)
   }
 
   const filteredWorkers = workers.filter((worker) =>
@@ -222,9 +231,8 @@ export default function WorkersPage() {
 
       {/* Main Content */}
       <Tabs defaultValue="grid" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsList className="grid w-full grid-cols-1 max-w-md">
           <TabsTrigger value="grid">Kartalar</TabsTrigger>
-          <TabsTrigger value="table">Jadval</TabsTrigger>
         </TabsList>
 
         <TabsContent value="grid" className="space-y-6">
@@ -320,8 +328,7 @@ export default function WorkersPage() {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation()
-                          setEditingWorker(worker)
-                          setShowWorkerDialog(true)
+                          handleEditWorker(worker)
                         }}
                         className="flex-1 ios-button bg-transparent"
                       >
@@ -334,10 +341,6 @@ export default function WorkersPage() {
               ))}
             </div>
           )}
-        </TabsContent>
-
-        <TabsContent value="table">
-          <ModderSheet data={filteredWorkers} onDataChange={setWorkers} tableName="workers" onRefresh={fetchWorkers} />
         </TabsContent>
       </Tabs>
 
@@ -366,15 +369,15 @@ export default function WorkersPage() {
 
       {/* Delete Confirmation Dialog */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-md mx-4 ios-card">
-            <CardHeader>
-              <CardTitle className="text-destructive">Ustalarni o'chirish</CardTitle>
-              <CardDescription>
+        <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-destructive">Ustalarni o'chirish</DialogTitle>
+              <DialogDescription>
                 {selectedRows.length} ta ustani o'chirishni tasdiqlash uchun MD parolni kiriting
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
               {deleteError && (
                 <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-200 text-sm">
                   {deleteError}
@@ -382,9 +385,7 @@ export default function WorkersPage() {
               )}
 
               <div className="space-y-2">
-                <label htmlFor="delete-password" className="text-sm font-medium">
-                  MD Parol
-                </label>
+                <Label htmlFor="delete-password">MD Parol</Label>
                 <Input
                   id="delete-password"
                   type="password"
@@ -423,9 +424,9 @@ export default function WorkersPage() {
                   )}
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )

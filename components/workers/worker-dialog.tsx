@@ -16,8 +16,9 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
-import { Plus, Edit, Save, Loader2 } from "lucide-react"
+import { Plus, Edit, Save, Loader2, Upload, X } from "lucide-react"
 import Image from "next/image"
 import { toast } from "sonner"
 
@@ -44,16 +45,26 @@ interface Worker {
   updated_at?: string
 }
 
+interface WorkerDocument {
+  passport_series?: string
+  passport_number?: string
+  birth_date?: string
+  passport_image_url?: string
+}
+
 interface WorkerDialogProps {
   worker?: Worker
-  onSave: () => void
+  onSaved: () => void
+  onClose: () => void
   trigger?: React.ReactNode
 }
 
-export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
+export function WorkerDialog({ worker, onSaved, onClose, trigger }: WorkerDialogProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadingPassport, setUploadingPassport] = useState(false)
+
   const [formData, setFormData] = useState<Worker>({
     first_name: "",
     last_name: "",
@@ -74,6 +85,13 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
     portfolio_images: [],
   })
 
+  const [documentData, setDocumentData] = useState<WorkerDocument>({
+    passport_series: "",
+    passport_number: "",
+    birth_date: "",
+    passport_image_url: "",
+  })
+
   useEffect(() => {
     if (worker) {
       setFormData({
@@ -81,6 +99,8 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
         skills: worker.skills || [],
         portfolio_images: worker.portfolio_images || [],
       })
+      // Load worker documents if editing
+      loadWorkerDocuments(worker.id!)
     } else {
       setFormData({
         first_name: "",
@@ -101,8 +121,33 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
         skills: [],
         portfolio_images: [],
       })
+      setDocumentData({
+        passport_series: "",
+        passport_number: "",
+        birth_date: "",
+        passport_image_url: "",
+      })
     }
   }, [worker, open])
+
+  const loadWorkerDocuments = async (workerId: string) => {
+    try {
+      const { data, error } = await supabase.from("workers_documents").select("*").eq("worker_id", workerId).single()
+
+      if (error && error.code !== "PGRST116") throw error
+
+      if (data) {
+        setDocumentData({
+          passport_series: data.passport_series || "",
+          passport_number: data.passport_number || "",
+          birth_date: data.birth_date || "",
+          passport_image_url: data.passport_image_url || "",
+        })
+      }
+    } catch (error) {
+      console.error("Error loading worker documents:", error)
+    }
+  }
 
   const handleInputChange = (field: keyof Worker, value: any) => {
     setFormData((prev) => ({
@@ -111,9 +156,16 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
     }))
   }
 
+  const handleDocumentChange = (field: keyof WorkerDocument, value: any) => {
+    setDocumentData((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }
+
   const handleSkillsChange = (skillsText: string) => {
     const skills = skillsText
-      .split(",")
+      .split("\n")
       .map((skill) => skill.trim())
       .filter(Boolean)
     setFormData((prev) => ({
@@ -162,10 +214,51 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
     }
   }
 
+  const handlePassportImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadingPassport(true)
+    try {
+      const fileExt = file.name.split(".").pop()
+      const fileName = `documents/passports/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+
+      const { data, error } = await supabase.storage.from("documents").upload(fileName, file, {
+        cacheControl: "3600",
+        upsert: false,
+      })
+
+      if (error) throw error
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("documents").getPublicUrl(fileName)
+
+      setDocumentData((prev) => ({
+        ...prev,
+        passport_image_url: publicUrl,
+      }))
+
+      toast.success("Passport rasmi yuklandi")
+    } catch (error) {
+      console.error("Error uploading passport image:", error)
+      toast.error("Passport rasmini yuklashda xatolik")
+    } finally {
+      setUploadingPassport(false)
+    }
+  }
+
   const removeImage = (index: number) => {
     setFormData((prev) => ({
       ...prev,
       portfolio_images: prev.portfolio_images?.filter((_, i) => i !== index) || [],
+    }))
+  }
+
+  const removePassportImage = () => {
+    setDocumentData((prev) => ({
+      ...prev,
+      passport_image_url: "",
     }))
   }
 
@@ -182,23 +275,64 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
         updated_at: new Date().toISOString(),
       }
 
+      let workerId: string
+
       if (worker?.id) {
         // Update existing worker
         const { error } = await supabase.from("workers").update(saveData).eq("id", worker.id)
         if (error) throw error
+        workerId = worker.id
       } else {
         // Create new worker
         const newWorkerData = {
           ...saveData,
           created_at: new Date().toISOString(),
         }
-        const { error } = await supabase.from("workers").insert([newWorkerData])
+        const { data, error } = await supabase.from("workers").insert([newWorkerData]).select().single()
         if (error) throw error
+        workerId = data.id
+      }
+
+      // Save worker documents if any document data is provided
+      if (
+        documentData.passport_series ||
+        documentData.passport_number ||
+        documentData.birth_date ||
+        documentData.passport_image_url
+      ) {
+        const documentSaveData = {
+          worker_id: workerId,
+          ...documentData,
+          updated_at: new Date().toISOString(),
+        }
+
+        // Check if document already exists
+        const { data: existingDoc } = await supabase
+          .from("workers_documents")
+          .select("id")
+          .eq("worker_id", workerId)
+          .single()
+
+        if (existingDoc) {
+          // Update existing document
+          const { error } = await supabase.from("workers_documents").update(documentSaveData).eq("worker_id", workerId)
+          if (error) throw error
+        } else {
+          // Create new document
+          const { error } = await supabase.from("workers_documents").insert([
+            {
+              ...documentSaveData,
+              created_at: new Date().toISOString(),
+            },
+          ])
+          if (error) throw error
+        }
       }
 
       toast.success(worker ? "Ishchi yangilandi" : "Ishchi qo'shildi")
-      onSave()
+      onSaved()
       setOpen(false)
+      onClose()
     } catch (error) {
       console.error("Error saving worker:", error)
       toast.error("Ishchini saqlashda xatolik yuz berdi")
@@ -217,7 +351,7 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {worker ? <Edit className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
@@ -228,7 +362,7 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Basic Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Asosiy ma'lumotlar</h3>
@@ -368,12 +502,13 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="skills">Ko'nikmalar (vergul bilan ajrating)</Label>
-              <Input
+              <Label htmlFor="skills">Ko'nikmalar (har birini yangi qatordan kiriting)</Label>
+              <Textarea
                 id="skills"
-                value={formData.skills?.join(", ") || ""}
+                value={formData.skills?.join("\n") || ""}
                 onChange={(e) => handleSkillsChange(e.target.value)}
-                placeholder="Qurilish, Ta'mirlash, Elektr ishlari"
+                placeholder="Qurilish&#10;Ta'mirlash&#10;Elektr ishlari"
+                rows={4}
               />
               {formData.skills && formData.skills.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
@@ -411,74 +546,179 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Portfolio Images */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Portfolio rasmlari</h3>
-
+          {/* Documents and Portfolio */}
           <div className="space-y-4">
-            <div>
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-                id="portfolio-upload"
-                disabled={uploading}
-              />
-              <Button
-                variant="outline"
-                onClick={() => document.getElementById("portfolio-upload")?.click()}
-                disabled={uploading}
-                className="ios-button bg-transparent"
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Yuklanmoqda...
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Rasm qo'shish
-                  </>
-                )}
-              </Button>
-            </div>
+            {/* Document Information */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Hujjat ma'lumotlari (ixtiyoriy)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="passport_series">Passport seriyasi</Label>
+                    <Input
+                      id="passport_series"
+                      value={documentData.passport_series || ""}
+                      onChange={(e) => handleDocumentChange("passport_series", e.target.value)}
+                      placeholder="AA"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="passport_number">Passport raqami</Label>
+                    <Input
+                      id="passport_number"
+                      value={documentData.passport_number || ""}
+                      onChange={(e) => handleDocumentChange("passport_number", e.target.value)}
+                      placeholder="1234567"
+                    />
+                  </div>
+                </div>
 
-            {formData.portfolio_images && formData.portfolio_images.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {formData.portfolio_images.map((image, index) => (
-                  <div key={index} className="relative group">
-                    <div className="aspect-square rounded-lg overflow-hidden border">
-                      <Image
-                        src={image || "/placeholder.svg"}
-                        alt={`Portfolio ${index + 1}`}
-                        width={200}
-                        height={200}
-                        className="object-cover w-full h-full"
-                      />
-                    </div>
+                <div className="space-y-2">
+                  <Label htmlFor="birth_date">Tug'ilgan sana</Label>
+                  <Input
+                    id="birth_date"
+                    type="date"
+                    value={documentData.birth_date || ""}
+                    onChange={(e) => handleDocumentChange("birth_date", e.target.value)}
+                  />
+                </div>
+
+                {/* Passport Image Upload */}
+                <div className="space-y-2">
+                  <Label>Passport rasmi</Label>
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePassportImageUpload}
+                      className="hidden"
+                      id="passport-upload"
+                      disabled={uploadingPassport}
+                    />
                     <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => removeImage(index)}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                      variant="outline"
+                      onClick={() => document.getElementById("passport-upload")?.click()}
+                      disabled={uploadingPassport}
+                      className="w-full ios-button bg-transparent"
                     >
-                      ×
+                      {uploadingPassport ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Yuklanmoqda...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Passport rasmini yuklash
+                        </>
+                      )}
                     </Button>
                   </div>
-                ))}
-              </div>
-            )}
+
+                  {documentData.passport_image_url && (
+                    <div className="relative group">
+                      <div className="aspect-video rounded-lg overflow-hidden border">
+                        <Image
+                          src={documentData.passport_image_url || "/placeholder.svg"}
+                          alt="Passport"
+                          width={300}
+                          height={200}
+                          className="object-cover w-full h-full"
+                        />
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={removePassportImage}
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Portfolio Images */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Portfolio rasmlari</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    id="portfolio-upload"
+                    disabled={uploading}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => document.getElementById("portfolio-upload")?.click()}
+                    disabled={uploading}
+                    className="w-full ios-button bg-transparent"
+                  >
+                    {uploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Yuklanmoqda...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Rasm qo'shish
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {formData.portfolio_images && formData.portfolio_images.length > 0 && (
+                  <div className="grid grid-cols-2 gap-4">
+                    {formData.portfolio_images.map((image, index) => (
+                      <div key={index} className="relative group">
+                        <div className="aspect-square rounded-lg overflow-hidden border">
+                          <Image
+                            src={image || "/placeholder.svg"}
+                            alt={`Portfolio ${index + 1}`}
+                            width={200}
+                            height={200}
+                            className="object-cover w-full h-full"
+                          />
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => removeImage(index)}
+                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-2 pt-4 border-t">
-          <Button variant="outline" onClick={() => setOpen(false)} className="ios-button bg-transparent">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setOpen(false)
+              onClose()
+            }}
+            className="ios-button bg-transparent"
+          >
             Bekor qilish
           </Button>
           <Button onClick={handleSave} disabled={loading} className="ios-button">
