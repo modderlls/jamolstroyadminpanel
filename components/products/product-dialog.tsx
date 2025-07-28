@@ -137,10 +137,16 @@ export function ProductDialog({
     }
   }, [product])
 
-  // Cleanup camera stream when dialog closes
+  // Cleanup camera stream when dialog closes or component unmounts
   useEffect(() => {
     if (!open && cameraStream) {
       stopCamera()
+    }
+    // Cleanup on unmount
+    return () => {
+      if (cameraStream) {
+        stopCamera()
+      }
     }
   }, [open, cameraStream])
 
@@ -158,10 +164,15 @@ export function ProductDialog({
   }
 
   const startCamera = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast.error("Brauzeringiz kamerani qo'llab-quvvatlamaydi.")
+      return
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: "environment",
+          facingMode: "environment", // Prioritize rear camera
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
@@ -172,11 +183,24 @@ export function ProductDialog({
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        videoRef.current.play()
+        // Play the video only after the srcObject is set
+        videoRef.current.play().catch((err) => {
+          console.error("Error playing video:", err)
+          toast.error("Videoni ijro etishda xatolik yuz berdi.")
+        })
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Camera error:", error)
-      toast.error("Kameraga kirish xatoligi")
+      if (error.name === "NotAllowedError") {
+        toast.error("Kameraga kirishga ruxsat berilmadi. Iltimos, brauzer sozlamalarini tekshiring.")
+      } else if (error.name === "NotFoundError") {
+        toast.error("Kamera topilmadi. Qurilmangizda kamera mavjudligiga ishonch hosil qiling.")
+      } else if (error.name === "NotReadableError") {
+        toast.error("Kamera allaqachon ishlatilmoqda.")
+      } else {
+        toast.error("Kameraga kirishda kutilmagan xatolik: " + error.message)
+      }
+      stopCamera(); // Ensure camera stream is stopped on error
     }
   }
 
@@ -185,21 +209,35 @@ export function ProductDialog({
       cameraStream.getTracks().forEach((track) => track.stop())
       setCameraStream(null)
       setShowCameraPreview(false)
+      if (videoRef.current) {
+        videoRef.current.srcObject = null; // Clear the srcObject
+      }
     }
   }
 
   const capturePhoto = async () => {
-    if (!videoRef.current || !canvasRef.current) return
+    if (!videoRef.current || !canvasRef.current) {
+      toast.error("Kamera tayyor emas.")
+      return
+    }
 
     const video = videoRef.current
     const canvas = canvasRef.current
     const context = canvas.getContext("2d")
 
-    if (!context) return
+    if (!context) {
+      toast.error("Kanvas kontekstini olib bo'lmadi.")
+      return
+    }
 
-    // Set canvas dimensions to match video
+    // Set canvas dimensions to match video's intrinsic dimensions
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
+
+    if (canvas.width === 0 || canvas.height === 0) {
+      toast.error("Kamera oqimi faol emas yoki o'lchamga ega emas.")
+      return;
+    }
 
     // Draw video frame to canvas
     context.drawImage(video, 0, 0, canvas.width, canvas.height)
@@ -210,10 +248,12 @@ export function ProductDialog({
         if (blob) {
           const file = new File([blob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" })
           await uploadSingleImage(file)
+        } else {
+          toast.error("Rasmni yaratishda xatolik: bo'sh blob.")
         }
       },
       "image/jpeg",
-      0.8,
+      0.9, // Quality from 0 to 1
     )
   }
 
@@ -442,6 +482,9 @@ export function ProductDialog({
                     setUseCamera(checked)
                     if (!checked) {
                       stopCamera()
+                    } else {
+                      // If switching to camera mode, automatically try to start camera
+                      startCamera();
                     }
                   }}
                 />
@@ -459,7 +502,15 @@ export function ProductDialog({
                     <div className="space-y-4">
                       {/* Camera Preview */}
                       <div className="relative bg-black rounded-lg overflow-hidden">
-                        <video ref={videoRef} autoPlay playsInline muted className="w-full h-64 object-cover" />
+                        <video ref={videoRef} autoPlay playsInline muted
+                           className="w-full h-64" style={{ objectFit: 'contain' }}
+                           onLoadedMetadata={() => { // Set canvas dimensions once video metadata is loaded
+                            if (videoRef.current && canvasRef.current) {
+                              canvasRef.current.width = videoRef.current.videoWidth;
+                              canvasRef.current.height = videoRef.current.videoHeight;
+                            }
+                          }}
+                        />
                         <canvas ref={canvasRef} className="hidden" />
                       </div>
 
