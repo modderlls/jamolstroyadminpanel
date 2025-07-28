@@ -60,7 +60,7 @@ export function DebtPaymentDialog({ open, onOpenChange, debtor, onSuccess }: Deb
         .from("orders")
         .update({
           is_payed: true,
-          is_borrowed: false,
+          is_borrowed: true,
           updated_at: new Date().toISOString(),
         })
         .eq("id", debtor.id)
