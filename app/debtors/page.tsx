@@ -22,6 +22,7 @@ import { supabase } from "@/lib/supabase"
 import { ModderSheet } from "@/components/moddersheet/modder-sheet"
 import { DebtPaymentDialog } from "@/components/debtors/debt-payment-dialog"
 import { ExtendDebtDialog } from "@/components/debtors/extend-debt-dialog"
+import { toast } from "sonner" // Import toast for notifications
 
 interface Debtor {
   id: string
@@ -37,6 +38,9 @@ interface Debtor {
   is_overdue: boolean
   is_payed: boolean
   status: string
+  // Add these if they are relevant for previous debtors display
+  updated_at: string;
+  days_late?: number; // Optional for previous debtors
 }
 
 export default function DebtorsPage() {
@@ -58,6 +62,7 @@ export default function DebtorsPage() {
   }, [])
 
   const fetchDebtors = async () => {
+    setLoading(true); // Set loading true when starting to fetch
     try {
       const { data, error } = await supabase
         .from("orders")
@@ -87,6 +92,7 @@ export default function DebtorsPage() {
       setDebtors(processedDebtors)
     } catch (error) {
       console.error("Error fetching debtors:", error)
+      toast.error("Joriy qarzdorlarni yuklashda xatolik yuz berdi.")
     } finally {
       setLoading(false)
     }
@@ -115,14 +121,15 @@ export default function DebtorsPage() {
         return {
           ...order,
           days_remaining: 0,
-          is_overdue: daysLate > 0,
-          days_late: Math.max(0, daysLate),
+          is_overdue: daysLate > 0, // In this context, is_overdue means they paid late
+          days_late: Math.max(0, daysLate), // Ensure days_late is not negative
         }
       })
 
       setPreviousDebtors(processedPreviousDebtors)
     } catch (error) {
       console.error("Error fetching previous debtors:", error)
+      toast.error("Oldingi qarzdorlarni yuklashda xatolik yuz berdi.")
     }
   }
 
@@ -155,7 +162,9 @@ export default function DebtorsPage() {
   }
 
   const getDebtorStatusColor = (debtor: Debtor) => {
-    if (debtor.is_overdue) {
+    if (debtor.is_payed) {
+      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+    } else if (debtor.is_overdue) {
       return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
     } else if (debtor.days_remaining <= 3) {
       return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
@@ -174,6 +183,14 @@ export default function DebtorsPage() {
     } else {
       return `${debtor.days_remaining} kun qoldi`
     }
+  }
+
+  // This function will be called when a debt payment is successfully processed in DebtPaymentDialog
+  const handlePaymentSuccess = () => {
+    toast.success("Qarz muvaffaqiyatli to'landi!")
+    setIsPaymentDialogOpen(false) // Close the dialog
+    fetchDebtors() // Re-fetch current debtors (to remove the paid one)
+    fetchPreviousDebtors() // Re-fetch previous debtors (to add the newly paid one)
   }
 
   if (loading) {
@@ -446,7 +463,7 @@ export default function DebtorsPage() {
                               <span>Qarz olgan sana:</span>
                               <span>{new Date(debtor.borrowed_updated_at).toLocaleDateString("uz-UZ")}</span>
                             </div>
-                            {debtor.days_late > 0 && (
+                            {debtor.days_late !== undefined && debtor.days_late > 0 && ( // Ensure days_late is checked for existence and value
                               <div className="flex justify-between text-sm text-red-600">
                                 <span>Kechikish:</span>
                                 <span>{debtor.days_late} kun</span>
@@ -504,7 +521,7 @@ export default function DebtorsPage() {
           <ModderSheet
             data={activeTab === "previous" ? previousDebtors : debtors}
             onDataChange={activeTab === "previous" ? setPreviousDebtors : setDebtors}
-            tableName="debtors"
+            tableName="debtors" // This should probably be "orders" since your data comes from "orders" table.
             onRefresh={() => {
               fetchDebtors()
               fetchPreviousDebtors()
@@ -518,17 +535,14 @@ export default function DebtorsPage() {
         open={isPaymentDialogOpen}
         onOpenChange={setIsPaymentDialogOpen}
         debtor={paymentDebtor}
-        onSuccess={() => {
-          fetchDebtors()
-          fetchPreviousDebtors()
-        }}
+        onSuccess={handlePaymentSuccess} // Use the new handler here
       />
 
       <ExtendDebtDialog
         open={isExtendDialogOpen}
         onOpenChange={setIsExtendDialogOpen}
         debtor={extendDebtor}
-        onSuccess={fetchDebtors}
+        onSuccess={fetchDebtors} // Only need to re-fetch current debtors for extension
       />
     </div>
   )

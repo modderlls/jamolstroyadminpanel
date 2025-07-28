@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,7 @@ import { supabase } from "@/lib/supabase"
 import Image from "next/image"
 import { CategorySelector } from "@/components/categories/category-selector"
 import { toast } from "sonner"
+import Webcam from "react-webcam" // Import Webcam
 
 interface Product {
   id: string
@@ -70,10 +71,8 @@ export function ProductDialog({
   const [loading, setLoading] = useState(false)
   const [uploadingImages, setUploadingImages] = useState(false)
   const [useCamera, setUseCamera] = useState(false)
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
+  const webcamRef = useRef<Webcam | null>(null) // Use Webcam ref
   const [showCameraPreview, setShowCameraPreview] = useState(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const [formData, setFormData] = useState({
     name_uz: "",
@@ -139,16 +138,11 @@ export function ProductDialog({
 
   // Cleanup camera stream when dialog closes or component unmounts
   useEffect(() => {
-    if (!open && cameraStream) {
-      stopCamera()
+    if (!open && showCameraPreview) {
+      // If dialog closes, hide camera preview
+      setShowCameraPreview(false)
     }
-    // Cleanup on unmount
-    return () => {
-      if (cameraStream) {
-        stopCamera()
-      }
-    }
-  }, [open, cameraStream])
+  }, [open, showCameraPreview])
 
   const getStorageProvider = () => {
     const settings = localStorage.getItem("storage_settings")
@@ -163,99 +157,49 @@ export function ProductDialog({
     return "supabase"
   }
 
-  const startCamera = async () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      toast.error("Brauzeringiz kamerani qo'llab-quvvatlamaydi.")
-      return
+  // Define video constraints for the rear camera
+  const videoConstraints = {
+    facingMode: "environment", // This specifies the rear camera
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+  }
+
+  const handleCameraOnUserMedia = useCallback(() => {
+    setShowCameraPreview(true);
+  }, []);
+
+  const handleCameraOnUserMediaError = useCallback((error: any) => {
+    console.error("Camera error:", error);
+    if (error.name === "NotAllowedError") {
+      toast.error("Kameraga kirishga ruxsat berilmadi. Iltimos, brauzer sozlamalarini tekshiring.");
+    } else if (error.name === "NotFoundError") {
+      toast.error("Kamera topilmadi. Qurilmangizda kamera mavjudligiga ishonch hosil qiling.");
+    } else if (error.name === "NotReadableError") {
+      toast.error("Kamera allaqachon ishlatilmoqda.");
+    } else {
+      toast.error("Kameraga kirishda kutilmagan xatolik: " + error.message);
     }
+    setShowCameraPreview(false); // Hide camera preview on error
+  }, []);
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "environment", // Prioritize rear camera
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      })
 
-      setCameraStream(stream)
-      setShowCameraPreview(true)
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        // Play the video only after the srcObject is set
-        videoRef.current.play().catch((err) => {
-          console.error("Error playing video:", err)
-          toast.error("Videoni ijro etishda xatolik yuz berdi.")
-        })
-      }
-    } catch (error: any) {
-      console.error("Camera error:", error)
-      if (error.name === "NotAllowedError") {
-        toast.error("Kameraga kirishga ruxsat berilmadi. Iltimos, brauzer sozlamalarini tekshiring.")
-      } else if (error.name === "NotFoundError") {
-        toast.error("Kamera topilmadi. Qurilmangizda kamera mavjudligiga ishonch hosil qiling.")
-      } else if (error.name === "NotReadableError") {
-        toast.error("Kamera allaqachon ishlatilmoqda.")
+  const capturePhoto = useCallback(async () => {
+    if (webcamRef.current) {
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (imageSrc) {
+        // Convert base64 image to Blob
+        const response = await fetch(imageSrc);
+        const blob = await response.blob();
+        const file = new File([blob], `camera-${Date.now()}.jpeg`, { type: "image/jpeg" });
+        await uploadSingleImage(file);
       } else {
-        toast.error("Kameraga kirishda kutilmagan xatolik: " + error.message)
+        toast.error("Rasmga olishda xatolik yuz berdi. Rasmingiz bo'sh bo'lishi mumkin.");
       }
-      stopCamera(); // Ensure camera stream is stopped on error
+    } else {
+      toast.error("Kamera tayyor emas. Bir oz kuting yoki qayta urinib ko'ring.");
     }
-  }
+  }, [webcamRef]);
 
-  const stopCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach((track) => track.stop())
-      setCameraStream(null)
-      setShowCameraPreview(false)
-      if (videoRef.current) {
-        videoRef.current.srcObject = null; // Clear the srcObject
-      }
-    }
-  }
-
-  const capturePhoto = async () => {
-    if (!videoRef.current || !canvasRef.current) {
-      toast.error("Kamera tayyor emas.")
-      return
-    }
-
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    const context = canvas.getContext("2d")
-
-    if (!context) {
-      toast.error("Kanvas kontekstini olib bo'lmadi.")
-      return
-    }
-
-    // Set canvas dimensions to match video's intrinsic dimensions
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-
-    if (canvas.width === 0 || canvas.height === 0) {
-      toast.error("Kamera oqimi faol emas yoki o'lchamga ega emas.")
-      return;
-    }
-
-    // Draw video frame to canvas
-    context.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-    // Convert canvas to blob
-    canvas.toBlob(
-      async (blob) => {
-        if (blob) {
-          const file = new File([blob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" })
-          await uploadSingleImage(file)
-        } else {
-          toast.error("Rasmni yaratishda xatolik: bo'sh blob.")
-        }
-      },
-      "image/jpeg",
-      0.9, // Quality from 0 to 1
-    )
-  }
 
   const uploadSingleImage = async (file: File) => {
     setUploadingImages(true)
@@ -480,55 +424,49 @@ export function ProductDialog({
                   checked={useCamera}
                   onCheckedChange={(checked) => {
                     setUseCamera(checked)
-                    if (!checked) {
-                      stopCamera()
-                    } else {
-                      // If switching to camera mode, automatically try to start camera
-                      startCamera();
-                    }
+                    setShowCameraPreview(checked) // Directly control camera preview visibility
                   }}
                 />
                 <Label htmlFor="camera-mode">Kamera rejimi</Label>
               </div>
 
-              {useCamera ? (
+              {useCamera && (
                 <div className="space-y-4">
-                  {!showCameraPreview ? (
-                    <Button type="button" onClick={startCamera} disabled={uploadingImages} className="w-full">
-                      <Camera className="h-4 w-4 mr-2" />
-                      Kamerani yoqish
-                    </Button>
-                  ) : (
-                    <div className="space-y-4">
-                      {/* Camera Preview */}
-                      <div className="relative bg-black rounded-lg overflow-hidden">
-                        <video ref={videoRef} autoPlay playsInline muted
-                           className="w-full h-64" style={{ objectFit: 'contain' }}
-                           onLoadedMetadata={() => { // Set canvas dimensions once video metadata is loaded
-                            if (videoRef.current && canvasRef.current) {
-                              canvasRef.current.width = videoRef.current.videoWidth;
-                              canvasRef.current.height = videoRef.current.videoHeight;
-                            }
-                          }}
-                        />
-                        <canvas ref={canvasRef} className="hidden" />
-                      </div>
+                  {/* Camera Preview using Webcam component */}
+                  <div className="relative bg-black rounded-lg overflow-hidden">
+                    {showCameraPreview && (
+                      <Webcam
+                        audio={false}
+                        ref={webcamRef}
+                        screenshotFormat="image/jpeg"
+                        videoConstraints={videoConstraints}
+                        onUserMedia={handleCameraOnUserMedia}
+                        onUserMediaError={handleCameraOnUserMediaError}
+                        className="w-full h-64 object-contain" // Use object-contain
+                      />
+                    )}
+                  </div>
 
-                      {/* Camera Controls */}
-                      <div className="flex gap-2">
-                        <Button type="button" onClick={capturePhoto} disabled={uploadingImages} className="flex-1">
-                          <Camera className="h-4 w-4 mr-2" />
-                          {uploadingImages ? "Yuklanmoqda..." : "Rasmga olish"}
-                        </Button>
-                        <Button type="button" variant="outline" onClick={stopCamera}>
-                          <StopCircle className="h-4 w-4 mr-2" />
-                          To'xtatish
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  {/* Camera Controls */}
+                  <div className="flex gap-2">
+                    <Button type="button" onClick={capturePhoto} disabled={uploadingImages || !showCameraPreview} className="flex-1">
+                      <Camera className="h-4 w-4 mr-2" />
+                      {uploadingImages ? "Yuklanmoqda..." : "Rasmga olish"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowCameraPreview(false)} // Simply hide camera preview
+                      disabled={!showCameraPreview}
+                    >
+                      <StopCircle className="h-4 w-4 mr-2" />
+                      To'xtatish
+                    </Button>
+                  </div>
                 </div>
-              ) : (
+              )}
+
+              {!useCamera && ( // Show file upload only if camera mode is off
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
                   <input
                     type="file"
