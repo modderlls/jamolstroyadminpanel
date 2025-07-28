@@ -7,21 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Star,
-  MapPin,
-  Phone,
-  Briefcase,
-  Clock,
-  DollarSign,
-  User,
-  FileText,
-  Shield,
-  Loader2,
-  Eye,
-  Calendar,
-  CreditCard,
-} from "lucide-react"
+import { Star, MapPin, Phone, Briefcase, Clock, DollarSign, User, FileText, Shield, Loader2, Eye } from "lucide-react"
 import Image from "next/image"
 
 interface Worker {
@@ -39,10 +25,6 @@ interface Worker {
   description_uz?: string
   skills?: string[]
   portfolio_images?: string[]
-  passport_series?: string
-  passport_number?: string
-  birth_date?: string
-  passport_image?: string
   created_at: string
 }
 
@@ -96,22 +78,18 @@ export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
   const fetchWorkerDocuments = async () => {
     try {
       // This would fetch from workers_documents table
-      // For now, we'll show the passport information from the worker record
-      const workerDocuments = []
-
-      if (worker.passport_series && worker.passport_number) {
-        workerDocuments.push({
-          id: "passport",
+      // For now, we'll show placeholder data
+      setDocuments([
+        {
+          id: "1",
           document_type: "passport",
-          document_number: `${worker.passport_series}${worker.passport_number}`,
-          series: worker.passport_series,
-          number: worker.passport_number,
-          birth_date: worker.birth_date,
-          document_images: worker.passport_image ? [worker.passport_image] : [],
-        })
-      }
-
-      setDocuments(workerDocuments)
+          document_number: "AA1234567",
+          issue_date: "2020-01-15",
+          expiry_date: "2030-01-15",
+          issued_by: "Toshkent shahar IIB",
+          document_images: ["/placeholder.svg"],
+        },
+      ])
     } catch (error) {
       console.error("Error fetching documents:", error)
     }
@@ -168,13 +146,6 @@ export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
                     <Star className="h-4 w-4 text-yellow-500 fill-current" />
                     <span>{worker.rating} reyting</span>
                   </div>
-
-                  {worker.birth_date && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span>{new Date(worker.birth_date).toLocaleDateString("uz-UZ")}</span>
-                    </div>
-                  )}
                 </div>
 
                 {worker.description_uz && (
@@ -301,46 +272,40 @@ export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
                       documents.map((doc) => (
                         <div key={doc.id} className="p-4 border rounded-lg space-y-3">
                           <div className="flex items-center justify-between">
-                            <h5 className="font-medium flex items-center gap-2">
-                              <CreditCard className="h-4 w-4" />
-                              Passport
+                            <h5 className="font-medium">
+                              {doc.document_type === "passport" ? "Pasport" : doc.document_type}
                             </h5>
                             <Badge variant="outline">{doc.document_number}</Badge>
                           </div>
 
                           <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
-                              <span className="text-muted-foreground">Seriya:</span>
-                              <p className="font-medium">{doc.series}</p>
+                              <span className="text-muted-foreground">Berilgan sana:</span>
+                              <p>{new Date(doc.issue_date).toLocaleDateString("uz-UZ")}</p>
                             </div>
                             <div>
-                              <span className="text-muted-foreground">Raqam:</span>
-                              <p className="font-medium">{doc.number}</p>
+                              <span className="text-muted-foreground">Amal qilish muddati:</span>
+                              <p>{new Date(doc.expiry_date).toLocaleDateString("uz-UZ")}</p>
                             </div>
                           </div>
 
-                          {doc.birth_date && (
-                            <div className="text-sm">
-                              <span className="text-muted-foreground">Tug'ilgan sana:</span>
-                              <p className="font-medium">{new Date(doc.birth_date).toLocaleDateString("uz-UZ")}</p>
-                            </div>
-                          )}
+                          <div className="text-sm">
+                            <span className="text-muted-foreground">Kim tomonidan berilgan:</span>
+                            <p>{doc.issued_by}</p>
+                          </div>
 
                           {doc.document_images && doc.document_images.length > 0 && (
-                            <div className="space-y-2">
-                              <span className="text-sm text-muted-foreground">Passport rasmi:</span>
-                              <div className="grid grid-cols-2 gap-2">
-                                {doc.document_images.map((image: string, index: number) => (
-                                  <Image
-                                    key={index}
-                                    src={image || "/placeholder.svg"}
-                                    alt={`Passport ${index + 1}`}
-                                    width={150}
-                                    height={100}
-                                    className="w-full h-20 object-cover rounded border"
-                                  />
-                                ))}
-                              </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {doc.document_images.map((image: string, index: number) => (
+                                <Image
+                                  key={index}
+                                  src={image || "/placeholder.svg"}
+                                  alt={`Document ${index + 1}`}
+                                  width={150}
+                                  height={100}
+                                  className="w-full h-20 object-cover rounded border"
+                                />
+                              ))}
                             </div>
                           )}
                         </div>
@@ -407,15 +372,6 @@ export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
                       {worker.is_available ? "Mavjud" : "Band"}
                     </Badge>
                   </div>
-                  {worker.passport_series && worker.passport_number && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Passport:</span>
-                      <span className="font-mono text-xs">
-                        {worker.passport_series}
-                        {worker.passport_number}
-                      </span>
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>

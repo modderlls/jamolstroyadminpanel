@@ -28,6 +28,8 @@ import {
   User,
   ImageIcon,
   Users,
+  LogIn,
+  LogOut,
 } from "lucide-react"
 
 interface StorageFile {
@@ -36,6 +38,7 @@ interface StorageFile {
   created_at?: string
   updated_at?: string
   id?: string
+  mimeType?: string
 }
 
 interface GoogleDriveStorage {
@@ -54,6 +57,12 @@ interface SupabaseStorage {
   buckets: string[]
 }
 
+interface GoogleUser {
+  displayName: string
+  emailAddress: string
+  picture?: string
+}
+
 export default function StoragePage() {
   const [files, setFiles] = useState<StorageFile[]>([])
   const [loading, setLoading] = useState(true)
@@ -70,11 +79,12 @@ export default function StoragePage() {
   const [productStorageProvider, setProductStorageProvider] = useState<"supabase" | "google_drive">("supabase")
   const [workerStorageProvider, setWorkerStorageProvider] = useState<"supabase" | "google_drive">("supabase")
 
-  // Google Drive OAuth
+  // Google Drive OAuth via Supabase
   const [googleAccessToken, setGoogleAccessToken] = useState<string>("")
-  const [googleUser, setGoogleUser] = useState<any>(null)
+  const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null)
   const [googleDriveStorage, setGoogleDriveStorage] = useState<GoogleDriveStorage | null>(null)
   const [supabaseStorage, setSupabaseStorage] = useState<SupabaseStorage | null>(null)
+  const [googleAuthLoading, setGoogleAuthLoading] = useState(false)
 
   // MD Password protection for viewing files
   const [viewPassword, setViewPassword] = useState("")
@@ -84,7 +94,7 @@ export default function StoragePage() {
 
   useEffect(() => {
     loadStorageSettings()
-    loadGoogleTokens()
+    checkGoogleAuth()
   }, [])
 
   useEffect(() => {
@@ -108,10 +118,25 @@ export default function StoragePage() {
     }
   }
 
-  const loadGoogleTokens = () => {
-    const accessToken = localStorage.getItem("google_access_token")
-    if (accessToken) {
-      setGoogleAccessToken(accessToken)
+  const checkGoogleAuth = async () => {
+    try {
+      const response = await fetch("/api/google-drive/auth-supabase", {
+        method: "POST",
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setGoogleAccessToken(data.accessToken)
+          setGoogleUser({
+            displayName: data.user.user_metadata?.full_name || data.user.email,
+            emailAddress: data.user.email,
+            picture: data.user.user_metadata?.avatar_url,
+          })
+        }
+      }
+    } catch (error) {
+      console.error("Error checking Google auth:", error)
     }
   }
 
@@ -148,30 +173,42 @@ export default function StoragePage() {
   }
 
   const authenticateGoogleDrive = async () => {
+    setGoogleAuthLoading(true)
     try {
-      const response = await fetch("/api/google-drive/auth")
-      const data = await response.json()
+      // Sign in with Google via Supabase Auth
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          scopes: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile",
+          redirectTo: `${window.location.origin}/storage`,
+        },
+      })
 
-      if (data.authUrl) {
-        // Open Google OAuth in popup
-        const popup = window.open(data.authUrl, "google-auth", "width=500,height=600")
-
-        // Listen for popup close
-        const checkClosed = setInterval(() => {
-          if (popup?.closed) {
-            clearInterval(checkClosed)
-            // Check if tokens were stored
-            const accessToken = localStorage.getItem("google_access_token")
-            if (accessToken) {
-              setGoogleAccessToken(accessToken)
-              fetchGoogleDriveInfo()
-            }
-          }
-        }, 1000)
+      if (error) {
+        console.error("Error signing in with Google:", error)
+        alert("Google bilan kirish xatoligi: " + error.message)
       }
     } catch (error) {
       console.error("Error authenticating Google Drive:", error)
       alert("Google Drive autentifikatsiyasida xatolik")
+    } finally {
+      setGoogleAuthLoading(false)
+    }
+  }
+
+  const signOutGoogle = async () => {
+    try {
+      await supabase.auth.signOut()
+      setGoogleAccessToken("")
+      setGoogleUser(null)
+      setGoogleDriveStorage(null)
+
+      // Switch to Supabase if currently using Google Drive
+      if (currentProvider === "google_drive") {
+        setCurrentProvider("supabase")
+      }
+    } catch (error) {
+      console.error("Error signing out:", error)
     }
   }
 
@@ -213,7 +250,7 @@ export default function StoragePage() {
     if (!googleAccessToken) return
 
     try {
-      const response = await fetch("/api/google-drive/storage-info", {
+      const response = await fetch("/api/google-drive/storage-info-supabase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accessToken: googleAccessToken }),
@@ -235,7 +272,7 @@ export default function StoragePage() {
       setLoading(true)
 
       if (currentProvider === "google_drive" && googleAccessToken) {
-        const response = await fetch("/api/google-drive/files-oauth", {
+        const response = await fetch("/api/google-drive/files-supabase", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ accessToken: googleAccessToken }),
@@ -326,7 +363,7 @@ export default function StoragePage() {
           formData.append("file", file)
           formData.append("accessToken", googleAccessToken)
 
-          const response = await fetch("/api/google-drive/upload-oauth", {
+          const response = await fetch("/api/google-drive/upload-supabase", {
             method: "POST",
             body: formData,
           })
@@ -357,13 +394,18 @@ export default function StoragePage() {
     }
   }
 
-  const deleteFile = async (fileName: string) => {
+  const deleteFile = async (fileName: string, fileId?: string) => {
     if (!confirm("Bu faylni o'chirishni tasdiqlaysizmi?")) return
 
     try {
-      if (currentProvider === "google_drive") {
-        alert("Google Drive fayllarini o'chirish hozircha qo'llab-quvvatlanmaydi")
-        return
+      if (currentProvider === "google_drive" && googleAccessToken && fileId) {
+        const response = await fetch("/api/google-drive/delete-supabase", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accessToken: googleAccessToken, fileId }),
+        })
+
+        if (!response.ok) throw new Error("Failed to delete Google Drive file")
       } else {
         // Supabase Storage
         const { error } = await supabase.storage.from("products").remove([fileName])
@@ -379,9 +421,9 @@ export default function StoragePage() {
     }
   }
 
-  const getFileUrl = (fileName: string) => {
-    if (currentProvider === "google_drive") {
-      return "#" // Google Drive URLs would be handled differently
+  const getFileUrl = (fileName: string, fileId?: string) => {
+    if (currentProvider === "google_drive" && fileId) {
+      return `https://drive.google.com/file/d/${fileId}/view`
     } else {
       const { data } = supabase.storage.from("products").getPublicUrl(fileName)
       return data.publicUrl
@@ -530,17 +572,39 @@ export default function StoragePage() {
               <div className="text-center py-4">
                 <Cloud className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <p className="text-sm text-muted-foreground mb-4">Google Drive bilan bog'lanmagan</p>
-                <Button onClick={authenticateGoogleDrive} className="ios-button">
-                  <Cloud className="h-4 w-4 mr-2" />
-                  Google Drive bilan bog'lanish
+                <Button onClick={authenticateGoogleDrive} disabled={googleAuthLoading} className="ios-button">
+                  {googleAuthLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Bog'lanmoqda...
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="h-4 w-4 mr-2" />
+                      Google bilan kirish
+                    </>
+                  )}
                 </Button>
               </div>
             ) : googleDriveStorage ? (
               <>
                 {googleUser && (
-                  <div className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg">
-                    <User className="h-4 w-4" />
-                    <span className="text-sm">{googleUser.displayName || googleUser.emailAddress}</span>
+                  <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      {googleUser.picture ? (
+                        <img
+                          src={googleUser.picture || "/placeholder.svg"}
+                          alt="User"
+                          className="w-6 h-6 rounded-full"
+                        />
+                      ) : (
+                        <User className="h-4 w-4" />
+                      )}
+                      <span className="text-sm">{googleUser.displayName}</span>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={signOutGoogle} className="ios-button bg-transparent">
+                      <LogOut className="h-3 w-3" />
+                    </Button>
                   </div>
                 )}
                 <div className="space-y-3">
@@ -679,21 +743,19 @@ export default function StoragePage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {currentProvider === "supabase" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(getFileUrl(file.name), "_blank")}
-                        className="ios-button bg-transparent"
-                      >
-                        <Eye className="h-3 w-3" />
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(getFileUrl(file.name, file.id), "_blank")}
+                      className="ios-button bg-transparent"
+                    >
+                      <Eye className="h-3 w-3" />
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        const url = getFileUrl(file.name)
+                        const url = getFileUrl(file.name, file.id)
                         const a = document.createElement("a")
                         a.href = url
                         a.download = file.name
@@ -706,7 +768,7 @@ export default function StoragePage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => deleteFile(file.name)}
+                      onClick={() => deleteFile(file.name, file.id)}
                       className="ios-button bg-transparent text-destructive hover:text-destructive"
                     >
                       <Trash2 className="h-3 w-3" />
@@ -885,11 +947,20 @@ export default function StoragePage() {
                         <span className="font-medium">Google Drive bog'lanishi</span>
                       </div>
                       <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                        Google Drive xususiyatlaridan foydalanish uchun OAuth orqali autentifikatsiya qiling
+                        Google Drive xususiyatlaridan foydalanish uchun Supabase Auth orqali Google bilan kiring
                       </p>
-                      <Button onClick={authenticateGoogleDrive} className="ios-button">
-                        <Cloud className="h-4 w-4 mr-2" />
-                        Google Drive bilan bog'lanish
+                      <Button onClick={authenticateGoogleDrive} disabled={googleAuthLoading} className="ios-button">
+                        {googleAuthLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Bog'lanmoqda...
+                          </>
+                        ) : (
+                          <>
+                            <LogIn className="h-4 w-4 mr-2" />
+                            Google bilan kirish
+                          </>
+                        )}
                       </Button>
                     </div>
                   )}
@@ -902,7 +973,7 @@ export default function StoragePage() {
                     <ul className="text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
                       <li>• Mavjud fayllar o'z joyida qoladi</li>
                       <li>• Yangi yuklangan fayllar tanlangan provayderga saqlanadi</li>
-                      <li>• Google Drive uchun OAuth autentifikatsiya talab qilinadi</li>
+                      <li>• Google Drive uchun Supabase Auth orqali autentifikatsiya talab qilinadi</li>
                       <li>• Har bir fayl turi uchun alohida provayder tanlash mumkin</li>
                     </ul>
                   </div>
