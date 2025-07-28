@@ -1,4 +1,5 @@
 "use client"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -7,16 +8,15 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Switch } from "@/components/ui/switch"
 import { supabase } from "@/lib/supabase"
+import { toast } from "sonner"
 import {
   HardDrive,
   Upload,
   Trash2,
   Settings,
   Database,
-  Cloud,
   Shield,
   Lock,
   Key,
@@ -25,11 +25,6 @@ import {
   RefreshCw,
   Eye,
   Download,
-  User,
-  ImageIcon,
-  Users,
-  LogIn,
-  LogOut,
   Camera,
   FileText,
   Video,
@@ -37,6 +32,9 @@ import {
   Archive,
   File,
   AlertCircle,
+  ImageIcon,
+  Users,
+  Server,
 } from "lucide-react"
 
 interface StorageFile {
@@ -46,30 +44,23 @@ interface StorageFile {
   created_at?: string
   updated_at?: string
   mimeType?: string
-  webViewLink?: string
-  thumbnailLink?: string
+  url?: string
 }
 
-interface GoogleDriveStorage {
-  total: number
-  used: number
-  free: number
-  totalGB: string
-  usedGB: string
-  freeGB: string
-  usagePercentage: string
+interface R2Storage {
+  totalFiles: number
+  totalSize: number
+  totalSizeGB: string
+  maxStorage: number
+  maxStorageGB: string
+  usedPercentage: string
+  bucketName: string
 }
 
 interface SupabaseStorage {
   totalSize: number
   fileCount: number
   buckets: string[]
-}
-
-interface GoogleUser {
-  displayName: string
-  emailAddress: string
-  picture?: string
 }
 
 export default function StoragePage() {
@@ -84,17 +75,13 @@ export default function StoragePage() {
   const [savingSettings, setSavingSettings] = useState(false)
 
   // Storage providers
-  const [currentProvider, setCurrentProvider] = useState<"supabase" | "google_drive">("supabase")
-  const [productStorageProvider, setProductStorageProvider] = useState<"supabase" | "google_drive">("supabase")
-  const [workerStorageProvider, setWorkerStorageProvider] = useState<"supabase" | "google_drive">("supabase")
+  const [currentProvider, setCurrentProvider] = useState<"supabase" | "r2">("supabase")
+  const [productStorageProvider, setProductStorageProvider] = useState<"supabase" | "r2">("supabase")
+  const [workerStorageProvider, setWorkerStorageProvider] = useState<"supabase" | "r2">("supabase")
 
-  // Google Drive OAuth via Supabase
-  const [googleAccessToken, setGoogleAccessToken] = useState<string>("")
-  const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null)
-  const [googleDriveStorage, setGoogleDriveStorage] = useState<GoogleDriveStorage | null>(null)
+  // Storage info
+  const [r2Storage, setR2Storage] = useState<R2Storage | null>(null)
   const [supabaseStorage, setSupabaseStorage] = useState<SupabaseStorage | null>(null)
-  const [googleAuthLoading, setGoogleAuthLoading] = useState(false)
-  const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(false)
 
   // MD Password protection for viewing files
   const [viewPassword, setViewPassword] = useState("")
@@ -108,7 +95,6 @@ export default function StoragePage() {
 
   useEffect(() => {
     loadStorageSettings()
-    checkGoogleAuth()
   }, [])
 
   useEffect(() => {
@@ -116,7 +102,7 @@ export default function StoragePage() {
       fetchStorageInfo()
       fetchFiles()
     }
-  }, [viewVerified, currentProvider, isGoogleAuthenticated])
+  }, [viewVerified, currentProvider])
 
   const loadStorageSettings = () => {
     const saved = localStorage.getItem("storage_settings")
@@ -129,31 +115,6 @@ export default function StoragePage() {
       } catch (error) {
         console.error("Error loading storage settings:", error)
       }
-    }
-  }
-
-  const checkGoogleAuth = async () => {
-    try {
-      const response = await fetch("/api/google-drive/auth", {
-        method: "POST",
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setGoogleAccessToken(data.accessToken)
-        setGoogleUser({
-          displayName: data.user.name || data.user.email,
-          emailAddress: data.user.email,
-          picture: data.user.avatar,
-        })
-        setIsGoogleAuthenticated(true)
-      } else if (data.needsAuth) {
-        setIsGoogleAuthenticated(false)
-      }
-    } catch (error) {
-      console.error("Error checking Google auth:", error)
-      setIsGoogleAuthenticated(false)
     }
   }
 
@@ -175,63 +136,20 @@ export default function StoragePage() {
 
       const data = await response.json()
 
-      if (data.valid) {
+      if (data.success) {
         setViewVerified(true)
         setViewPassword("")
+        toast.success("Kirish muvaffaqiyatli")
       } else {
-        setViewError(data.error || "Noto'g'ri parol")
+        setViewError("Noto'g'ri parol")
+        toast.error("Noto'g'ri parol")
       }
     } catch (error) {
       console.error("Error verifying access:", error)
       setViewError("Parolni tekshirishda xatolik yuz berdi")
+      toast.error("Parolni tekshirishda xatolik")
     } finally {
       setViewLoading(false)
-    }
-  }
-
-  const authenticateGoogleDrive = async () => {
-    setGoogleAuthLoading(true)
-    try {
-      // Sign in with Google via Supabase Auth with Drive scopes
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          scopes:
-            "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email",
-          redirectTo: `${window.location.origin}/storage`,
-          queryParams: {
-            access_type: "offline",
-            prompt: "consent",
-          },
-        },
-      })
-
-      if (error) {
-        console.error("Error signing in with Google:", error)
-        alert("Google bilan kirish xatoligi: " + error.message)
-      }
-    } catch (error) {
-      console.error("Error authenticating Google Drive:", error)
-      alert("Google Drive autentifikatsiyasida xatolik")
-    } finally {
-      setGoogleAuthLoading(false)
-    }
-  }
-
-  const signOutGoogle = async () => {
-    try {
-      await supabase.auth.signOut()
-      setGoogleAccessToken("")
-      setGoogleUser(null)
-      setGoogleDriveStorage(null)
-      setIsGoogleAuthenticated(false)
-
-      // Switch to Supabase if currently using Google Drive
-      if (currentProvider === "google_drive") {
-        setCurrentProvider("supabase")
-      }
-    } catch (error) {
-      console.error("Error signing out:", error)
     }
   }
 
@@ -260,33 +178,16 @@ export default function StoragePage() {
         buckets: buckets?.map((b) => b.name) || [],
       })
 
-      // Fetch Google Drive info if authenticated
-      if (googleAccessToken && isGoogleAuthenticated) {
-        await fetchGoogleDriveInfo()
+      // Fetch R2 storage info
+      const r2Response = await fetch("/api/r2/storage-info")
+      const r2Data = await r2Response.json()
+
+      if (r2Data.success) {
+        setR2Storage(r2Data.storage)
       }
     } catch (error) {
       console.error("Error fetching storage info:", error)
-    }
-  }
-
-  const fetchGoogleDriveInfo = async () => {
-    if (!googleAccessToken) return
-
-    try {
-      const response = await fetch("/api/google-drive/storage-info", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessToken: googleAccessToken }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setGoogleDriveStorage(data.storage)
-        setGoogleUser(data.user)
-      }
-    } catch (error) {
-      console.error("Error fetching Google Drive info:", error)
+      toast.error("Xotira ma'lumotlarini yuklashda xatolik")
     }
   }
 
@@ -294,18 +195,20 @@ export default function StoragePage() {
     try {
       setLoading(true)
 
-      if (currentProvider === "google_drive" && googleAccessToken && isGoogleAuthenticated) {
-        const response = await fetch("/api/google-drive/files", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ accessToken: googleAccessToken }),
-        })
+      if (currentProvider === "r2") {
+        const response = await fetch("/api/r2/files")
         const data = await response.json()
-        setFiles(data.files || [])
+
+        if (data.success) {
+          setFiles(data.files || [])
+        } else {
+          throw new Error(data.error)
+        }
       } else {
         // Supabase Storage
         const { data, error } = await supabase.storage.from("products").list()
         if (error) throw error
+
         setFiles(
           data?.map((file) => ({
             id: file.name,
@@ -319,6 +222,7 @@ export default function StoragePage() {
       }
     } catch (error) {
       console.error("Error fetching files:", error)
+      toast.error("Fayllarni yuklashda xatolik")
       setFiles([])
     } finally {
       setLoading(false)
@@ -343,15 +247,18 @@ export default function StoragePage() {
 
       const data = await response.json()
 
-      if (data.valid) {
+      if (data.success) {
         setSettingsVerified(true)
         setSettingsPassword("")
+        toast.success("Sozlamalarga kirish muvaffaqiyatli")
       } else {
-        setSettingsError(data.error || "Noto'g'ri parol")
+        setSettingsError("Noto'g'ri parol")
+        toast.error("Noto'g'ri parol")
       }
     } catch (error) {
       console.error("Error verifying access:", error)
       setSettingsError("Parolni tekshirishda xatolik yuz berdi")
+      toast.error("Parolni tekshirishda xatolik")
     } finally {
       setSettingsLoading(false)
     }
@@ -372,12 +279,12 @@ export default function StoragePage() {
       // Refresh files with new storage provider
       await fetchFiles()
 
-      alert("Xotira sozlamalari muvaffaqiyatli saqlandi!")
+      toast.success("Xotira sozlamalari muvaffaqiyatli saqlandi!")
       setShowSettings(false)
       setSettingsVerified(false)
     } catch (error) {
       console.error("Error saving storage settings:", error)
-      alert("Sozlamalarni saqlashda xatolik yuz berdi")
+      toast.error("Sozlamalarni saqlashda xatolik yuz berdi")
     } finally {
       setSavingSettings(false)
     }
@@ -418,6 +325,7 @@ export default function StoragePage() {
             const dataTransfer = new DataTransfer()
             dataTransfer.items.add(file)
             setSelectedFiles(dataTransfer.files)
+            toast.success("Rasm muvaffaqiyatli olindi")
           }
         },
         "image/jpeg",
@@ -425,27 +333,30 @@ export default function StoragePage() {
       )
     } catch (error) {
       console.error("Camera error:", error)
-      alert("Kameraga kirish xatoligi")
+      toast.error("Kameraga kirish xatoligi")
     }
   }
 
   const handleFileUpload = async () => {
-    if (!selectedFiles || selectedFiles.length === 0) return
+    if (!selectedFiles || selectedFiles.length === 0) {
+      toast.error("Fayl tanlang")
+      return
+    }
 
     setUploading(true)
     try {
       for (const file of Array.from(selectedFiles)) {
-        if (currentProvider === "google_drive" && googleAccessToken && isGoogleAuthenticated) {
+        if (currentProvider === "r2") {
           const formData = new FormData()
           formData.append("file", file)
-          formData.append("accessToken", googleAccessToken)
 
-          const response = await fetch("/api/google-drive/upload", {
+          const response = await fetch("/api/r2/upload", {
             method: "POST",
             body: formData,
           })
 
-          if (!response.ok) throw new Error("Google Drive upload failed")
+          const data = await response.json()
+          if (!data.success) throw new Error(data.error)
         } else {
           // Supabase Storage
           const fileExt = file.name.split(".").pop()
@@ -462,11 +373,11 @@ export default function StoragePage() {
 
       await fetchFiles()
       await fetchStorageInfo()
-      alert("Fayllar muvaffaqiyatli yuklandi!")
+      toast.success("Fayllar muvaffaqiyatli yuklandi!")
       setSelectedFiles(null)
     } catch (error) {
       console.error("Error uploading files:", error)
-      alert("Fayllarni yuklashda xatolik yuz berdi")
+      toast.error("Fayllarni yuklashda xatolik yuz berdi")
     } finally {
       setUploading(false)
     }
@@ -476,14 +387,13 @@ export default function StoragePage() {
     if (!confirm("Bu faylni o'chirishni tasdiqlaysizmi?")) return
 
     try {
-      if (currentProvider === "google_drive" && googleAccessToken && fileId && isGoogleAuthenticated) {
-        const response = await fetch("/api/google-drive/delete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ accessToken: googleAccessToken, fileId }),
+      if (currentProvider === "r2") {
+        const response = await fetch(`/api/r2/delete?key=${encodeURIComponent(fileId || fileName)}`, {
+          method: "DELETE",
         })
 
-        if (!response.ok) throw new Error("Failed to delete Google Drive file")
+        const data = await response.json()
+        if (!data.success) throw new Error(data.error)
       } else {
         // Supabase Storage
         const { error } = await supabase.storage.from("products").remove([fileName])
@@ -492,16 +402,16 @@ export default function StoragePage() {
 
       await fetchFiles()
       await fetchStorageInfo()
-      alert("Fayl muvaffaqiyatli o'chirildi!")
+      toast.success("Fayl muvaffaqiyatli o'chirildi!")
     } catch (error) {
       console.error("Error deleting file:", error)
-      alert("Faylni o'chirishda xatolik yuz berdi")
+      toast.error("Faylni o'chirishda xatolik yuz berdi")
     }
   }
 
-  const getFileUrl = (fileName: string, fileId?: string) => {
-    if (currentProvider === "google_drive" && fileId) {
-      return `https://drive.google.com/file/d/${fileId}/view`
+  const getFileUrl = (fileName: string, fileUrl?: string) => {
+    if (currentProvider === "r2" && fileUrl) {
+      return fileUrl
     } else {
       const { data } = supabase.storage.from("products").getPublicUrl(fileName)
       return data.publicUrl
@@ -540,9 +450,10 @@ export default function StoragePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {viewError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-200 text-sm">
-                  {viewError}
-                </div>
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{viewError}</AlertDescription>
+                </Alert>
               )}
 
               <div className="space-y-2">
@@ -553,7 +464,6 @@ export default function StoragePage() {
                   value={viewPassword}
                   onChange={(e) => setViewPassword(e.target.value)}
                   placeholder="MD parolni kiriting"
-                  pattern="[0-9]*"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       verifyViewAccess()
@@ -562,7 +472,7 @@ export default function StoragePage() {
                 />
               </div>
 
-              <Button onClick={verifyViewAccess} disabled={viewLoading || !viewPassword} className="w-full ios-button">
+              <Button onClick={verifyViewAccess} disabled={viewLoading || !viewPassword} className="w-full">
                 {viewLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -594,11 +504,11 @@ export default function StoragePage() {
           <p className="text-muted-foreground">Fayllar va xotira sozlamalari</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowSettings(true)} className="ios-button bg-transparent">
+          <Button variant="outline" onClick={() => setShowSettings(true)}>
             <Settings className="h-4 w-4 mr-2" />
             Sozlamalar
           </Button>
-          <Button onClick={() => fetchFiles()} variant="outline" className="ios-button bg-transparent">
+          <Button onClick={() => fetchFiles()} variant="outline">
             <RefreshCw className="h-4 w-4 mr-2" />
             Yangilash
           </Button>
@@ -608,7 +518,7 @@ export default function StoragePage() {
       {/* Storage Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Supabase Storage */}
-        <Card className="ios-card">
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Database className="h-5 w-5 text-green-600" />
@@ -653,74 +563,41 @@ export default function StoragePage() {
           </CardContent>
         </Card>
 
-        {/* Google Drive Storage */}
-        <Card className="ios-card">
+        {/* Cloudflare R2 Storage */}
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Cloud className="h-5 w-5 text-blue-600" />
-              Google Drive
+              <Server className="h-5 w-5 text-orange-600" />
+              Cloudflare R2
             </CardTitle>
             <CardDescription>Bulutli xotira ma'lumotlari</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!isGoogleAuthenticated ? (
-              <div className="text-center py-4">
-                <Cloud className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <p className="text-sm text-muted-foreground mb-4">Google Drive bilan bog'lanmagan</p>
-                <Button onClick={authenticateGoogleDrive} disabled={googleAuthLoading} className="ios-button">
-                  {googleAuthLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Bog'lanmoqda...
-                    </>
-                  ) : (
-                    <>
-                      <LogIn className="h-4 w-4 mr-2" />
-                      Google bilan kirish
-                    </>
-                  )}
-                </Button>
-              </div>
-            ) : googleDriveStorage ? (
+            {r2Storage ? (
               <>
-                {googleUser && (
-                  <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-6 w-6">
-                        <AvatarImage src={googleUser.picture || "/placeholder.svg"} />
-                        <AvatarFallback>
-                          <User className="h-3 w-3" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm">{googleUser.displayName}</span>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={signOutGoogle} className="ios-button bg-transparent">
-                      <LogOut className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
                 <div className="space-y-3">
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
+                      <span>Jami fayllar:</span>
+                      <span className="font-medium">{r2Storage.totalFiles} ta</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
                       <span>Jami hajm:</span>
-                      <span className="font-medium">{googleDriveStorage.totalGB} GB</span>
+                      <span className="font-medium">{r2Storage.totalSizeGB} GB</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span>Ishlatilgan:</span>
-                      <span className="font-medium">{googleDriveStorage.usedGB} GB</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Bo'sh:</span>
-                      <span className="font-medium">{googleDriveStorage.freeGB} GB</span>
+                      <span>Maksimal:</span>
+                      <span className="font-medium">{r2Storage.maxStorageGB} GB</span>
                     </div>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs">
                       <span>Ishlatilish:</span>
-                      <span>{googleDriveStorage.usagePercentage}%</span>
+                      <span>{r2Storage.usedPercentage}%</span>
                     </div>
-                    <Progress value={Number.parseFloat(googleDriveStorage.usagePercentage)} className="h-2" />
+                    <Progress value={Number.parseFloat(r2Storage.usedPercentage)} className="h-2" />
                   </div>
+                  <div className="text-xs text-muted-foreground">Bucket: {r2Storage.bucketName}</div>
                 </div>
               </>
             ) : (
@@ -734,35 +611,33 @@ export default function StoragePage() {
       </div>
 
       {/* Current Storage Provider */}
-      <Card className="ios-card">
+      <Card>
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {currentProvider === "google_drive" ? (
-                <Cloud className="h-8 w-8 text-blue-600" />
+              {currentProvider === "r2" ? (
+                <Server className="h-8 w-8 text-orange-600" />
               ) : (
                 <Database className="h-8 w-8 text-green-600" />
               )}
               <div>
-                <h3 className="font-semibold">
-                  {currentProvider === "google_drive" ? "Google Drive" : "Supabase Storage"}
-                </h3>
+                <h3 className="font-semibold">{currentProvider === "r2" ? "Cloudflare R2" : "Supabase Storage"}</h3>
                 <p className="text-sm text-muted-foreground">Hozirgi fayl yuklash provayderi</p>
               </div>
             </div>
-            <Badge variant={currentProvider === "google_drive" ? "default" : "secondary"}>
-              {currentProvider === "google_drive" ? "Bulutli" : "Mahalliy"}
+            <Badge variant={currentProvider === "r2" ? "default" : "secondary"}>
+              {currentProvider === "r2" ? "Bulutli" : "Mahalliy"}
             </Badge>
           </div>
         </CardContent>
       </Card>
 
       {/* File Upload */}
-      <Card className="ios-card">
+      <Card>
         <CardHeader>
           <CardTitle>Fayl yuklash</CardTitle>
           <CardDescription>
-            {currentProvider === "google_drive" ? "Google Drive" : "Supabase Storage"} ga fayllarni yuklang
+            {currentProvider === "r2" ? "Cloudflare R2" : "Supabase Storage"} ga fayllarni yuklang
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -774,7 +649,7 @@ export default function StoragePage() {
 
           {useCamera ? (
             <div className="space-y-4">
-              <Button onClick={handleCameraCapture} className="w-full ios-button">
+              <Button onClick={handleCameraCapture} className="w-full">
                 <Camera className="h-4 w-4 mr-2" />
                 Rasmga olish
               </Button>
@@ -790,7 +665,7 @@ export default function StoragePage() {
                 onChange={(e) => setSelectedFiles(e.target.files)}
                 className="hidden"
                 id="file-upload"
-                disabled={uploading || (currentProvider === "google_drive" && !isGoogleAuthenticated)}
+                disabled={uploading}
               />
               <label htmlFor="file-upload" className="flex flex-col items-center justify-center cursor-pointer">
                 {uploading ? (
@@ -799,11 +674,7 @@ export default function StoragePage() {
                   <Upload className="h-12 w-12 text-muted-foreground" />
                 )}
                 <p className="text-lg font-medium mt-4">
-                  {uploading
-                    ? "Yuklanmoqda..."
-                    : currentProvider === "google_drive" && !isGoogleAuthenticated
-                      ? "Google Drive bilan bog'laning"
-                      : "Fayllarni yuklash uchun bosing"}
+                  {uploading ? "Yuklanmoqda..." : "Fayllarni yuklash uchun bosing"}
                 </p>
                 <p className="text-sm text-muted-foreground">Yoki fayllarni bu yerga sudrab olib keling</p>
               </label>
@@ -813,11 +684,7 @@ export default function StoragePage() {
           {selectedFiles && selectedFiles.length > 0 && (
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">{selectedFiles.length} ta fayl tanlandi</p>
-              <Button
-                onClick={handleFileUpload}
-                disabled={uploading || (currentProvider === "google_drive" && !isGoogleAuthenticated)}
-                className="w-full ios-button"
-              >
+              <Button onClick={handleFileUpload} disabled={uploading} className="w-full">
                 {uploading ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -832,22 +699,15 @@ export default function StoragePage() {
               </Button>
             </div>
           )}
-
-          {currentProvider === "google_drive" && !isGoogleAuthenticated && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>Google Drive ga fayl yuklash uchun Google akkauntingiz bilan kiring.</AlertDescription>
-            </Alert>
-          )}
         </CardContent>
       </Card>
 
       {/* Files List */}
-      <Card className="ios-card">
+      <Card>
         <CardHeader>
           <CardTitle>Yuklangan fayllar</CardTitle>
           <CardDescription>
-            {currentProvider === "google_drive" ? "Google Drive" : "Supabase Storage"} dagi fayllar
+            {currentProvider === "r2" ? "Cloudflare R2" : "Supabase Storage"} dagi fayllar
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -887,8 +747,7 @@ export default function StoragePage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => window.open(getFileUrl(file.name, file.id), "_blank")}
-                      className="ios-button bg-transparent"
+                      onClick={() => window.open(getFileUrl(file.name, file.url), "_blank")}
                     >
                       <Eye className="h-3 w-3" />
                     </Button>
@@ -896,13 +755,12 @@ export default function StoragePage() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        const url = getFileUrl(file.name, file.id)
+                        const url = getFileUrl(file.name, file.url)
                         const a = document.createElement("a")
                         a.href = url
                         a.download = file.name
                         a.click()
                       }}
-                      className="ios-button bg-transparent"
                     >
                       <Download className="h-3 w-3" />
                     </Button>
@@ -910,7 +768,7 @@ export default function StoragePage() {
                       variant="outline"
                       size="sm"
                       onClick={() => deleteFile(file.name, file.id)}
-                      className="ios-button bg-transparent text-destructive hover:text-destructive"
+                      disabled={loading}
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
@@ -925,7 +783,7 @@ export default function StoragePage() {
       {/* Settings Dialog */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-3xl mx-4 ios-card max-h-[90vh] overflow-y-auto">
+          <Card className="w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5" />
@@ -942,9 +800,10 @@ export default function StoragePage() {
                   </div>
 
                   {settingsError && (
-                    <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-200 text-sm">
-                      {settingsError}
-                    </div>
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{settingsError}</AlertDescription>
+                    </Alert>
                   )}
 
                   <div className="space-y-2">
@@ -955,7 +814,6 @@ export default function StoragePage() {
                       value={settingsPassword}
                       onChange={(e) => setSettingsPassword(e.target.value)}
                       placeholder="MD parolni kiriting"
-                      pattern="[0-9]*"
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           verifySettingsAccess()
@@ -967,7 +825,7 @@ export default function StoragePage() {
                   <Button
                     onClick={verifySettingsAccess}
                     disabled={settingsLoading || !settingsPassword}
-                    className="w-full ios-button"
+                    className="w-full"
                   >
                     {settingsLoading ? (
                       <>
@@ -1003,19 +861,14 @@ export default function StoragePage() {
 
                       <Card
                         className={`cursor-pointer transition-all ${
-                          currentProvider === "google_drive" ? "ring-2 ring-primary" : "hover:shadow-md"
+                          currentProvider === "r2" ? "ring-2 ring-primary" : "hover:shadow-md"
                         }`}
-                        onClick={() => setCurrentProvider("google_drive")}
+                        onClick={() => setCurrentProvider("r2")}
                       >
                         <CardContent className="p-4 text-center">
-                          <Cloud className="h-8 w-8 mx-auto mb-2 text-blue-600" />
-                          <h4 className="font-medium">Google Drive</h4>
+                          <Server className="h-8 w-8 mx-auto mb-2 text-orange-600" />
+                          <h4 className="font-medium">Cloudflare R2</h4>
                           <p className="text-sm text-muted-foreground">Bulutli xotira</p>
-                          {!isGoogleAuthenticated && (
-                            <Badge variant="outline" className="mt-2 text-xs">
-                              Bog'lanmagan
-                            </Badge>
-                          )}
                         </CardContent>
                       </Card>
                     </div>
@@ -1035,19 +888,16 @@ export default function StoragePage() {
                         <Button
                           variant={productStorageProvider === "supabase" ? "default" : "outline"}
                           onClick={() => setProductStorageProvider("supabase")}
-                          className="ios-button"
                         >
                           <Database className="h-4 w-4 mr-2" />
                           Supabase
                         </Button>
                         <Button
-                          variant={productStorageProvider === "google_drive" ? "default" : "outline"}
-                          onClick={() => setProductStorageProvider("google_drive")}
-                          className="ios-button"
-                          disabled={!isGoogleAuthenticated}
+                          variant={productStorageProvider === "r2" ? "default" : "outline"}
+                          onClick={() => setProductStorageProvider("r2")}
                         >
-                          <Cloud className="h-4 w-4 mr-2" />
-                          Google Drive
+                          <Server className="h-4 w-4 mr-2" />
+                          Cloudflare R2
                         </Button>
                       </div>
                     </div>
@@ -1062,62 +912,33 @@ export default function StoragePage() {
                         <Button
                           variant={workerStorageProvider === "supabase" ? "default" : "outline"}
                           onClick={() => setWorkerStorageProvider("supabase")}
-                          className="ios-button"
                         >
                           <Database className="h-4 w-4 mr-2" />
                           Supabase
                         </Button>
                         <Button
-                          variant={workerStorageProvider === "google_drive" ? "default" : "outline"}
-                          onClick={() => setWorkerStorageProvider("google_drive")}
-                          className="ios-button"
-                          disabled={!isGoogleAuthenticated}
+                          variant={workerStorageProvider === "r2" ? "default" : "outline"}
+                          onClick={() => setWorkerStorageProvider("r2")}
                         >
-                          <Cloud className="h-4 w-4 mr-2" />
-                          Google Drive
+                          <Server className="h-4 w-4 mr-2" />
+                          Cloudflare R2
                         </Button>
                       </div>
                     </div>
                   </div>
 
-                  {/* Google Drive Authentication */}
-                  {!isGoogleAuthenticated && (
-                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200 mb-3">
-                        <Cloud className="h-4 w-4" />
-                        <span className="font-medium">Google Drive bog'lanishi</span>
-                      </div>
-                      <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                        Google Drive xususiyatlaridan foydalanish uchun Supabase Auth orqali Google bilan kiring
-                      </p>
-                      <Button onClick={authenticateGoogleDrive} disabled={googleAuthLoading} className="ios-button">
-                        {googleAuthLoading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Bog'lanmoqda...
-                          </>
-                        ) : (
-                          <>
-                            <LogIn className="h-4 w-4 mr-2" />
-                            Google bilan kirish
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  )}
-
-                  <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                    <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200 mb-2">
-                      <Shield className="h-4 w-4" />
-                      <span className="font-medium">Muhim eslatma</span>
-                    </div>
-                    <ul className="text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
-                      <li>• Mavjud fayllar o'z joyida qoladi</li>
-                      <li>• Yangi yuklangan fayllar tanlangan provayderga saqlanadi</li>
-                      <li>• Google Drive uchun Supabase Auth orqali autentifikatsiya talab qilinadi</li>
-                      <li>• Har bir fayl turi uchun alohida provayder tanlash mumkin</li>
-                    </ul>
-                  </div>
+                  <Alert>
+                    <Shield className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Muhim eslatma:</strong>
+                      <ul className="mt-2 space-y-1 text-sm">
+                        <li>• Mavjud fayllar o'z joyida qoladi</li>
+                        <li>• Yangi yuklangan fayllar tanlangan provayderga saqlanadi</li>
+                        <li>• Cloudflare R2 yuqori tezlik va arzon narxni ta'minlaydi</li>
+                        <li>• Har bir fayl turi uchun alohida provayder tanlash mumkin</li>
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
                 </div>
               )}
 
@@ -1130,12 +951,12 @@ export default function StoragePage() {
                     setSettingsPassword("")
                     setSettingsError("")
                   }}
-                  className="flex-1 ios-button bg-transparent"
+                  className="flex-1"
                 >
                   Bekor qilish
                 </Button>
                 {settingsVerified && (
-                  <Button onClick={saveStorageSettings} disabled={savingSettings} className="flex-1 ios-button">
+                  <Button onClick={saveStorageSettings} disabled={savingSettings} className="flex-1">
                     {savingSettings ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
