@@ -5,10 +5,10 @@ import { r2Client, R2_BUCKET_NAME } from "@/lib/r2-client"
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const fileName = searchParams.get("fileName")
+    const fileName = searchParams.get("file")
 
     if (!fileName) {
-      return NextResponse.json({ success: false, error: "File name is required" }, { status: 400 })
+      return NextResponse.json({ success: false, error: "No file name provided" }, { status: 400 })
     }
 
     const command = new DeleteObjectCommand({
