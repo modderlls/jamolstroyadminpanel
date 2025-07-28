@@ -136,7 +136,7 @@ export default function StoragePage() {
 
       const data = await response.json()
 
-      if (data.success) {
+      if (data.valid) {
         setViewVerified(true)
         setViewPassword("")
         toast.success("Kirish muvaffaqiyatli")
@@ -182,7 +182,7 @@ export default function StoragePage() {
       const r2Response = await fetch("/api/r2/storage-info")
       const r2Data = await r2Response.json()
 
-      if (r2Data.success) {
+      if (r2data.valid) {
         setR2Storage(r2Data.storage)
       }
     } catch (error) {
@@ -199,7 +199,7 @@ export default function StoragePage() {
         const response = await fetch("/api/r2/files")
         const data = await response.json()
 
-        if (data.success) {
+        if (data.valid) {
           setFiles(data.files || [])
         } else {
           throw new Error(data.error)
@@ -247,7 +247,7 @@ export default function StoragePage() {
 
       const data = await response.json()
 
-      if (data.success) {
+      if (data.valid) {
         setSettingsVerified(true)
         setSettingsPassword("")
         toast.success("Sozlamalarga kirish muvaffaqiyatli")
@@ -356,7 +356,7 @@ export default function StoragePage() {
           })
 
           const data = await response.json()
-          if (!data.success) throw new Error(data.error)
+          if (!data.valid) throw new Error(data.error)
         } else {
           // Supabase Storage
           const fileExt = file.name.split(".").pop()
@@ -393,7 +393,7 @@ export default function StoragePage() {
         })
 
         const data = await response.json()
-        if (!data.success) throw new Error(data.error)
+        if (!data.valid) throw new Error(data.error)
       } else {
         // Supabase Storage
         const { error } = await supabase.storage.from("products").remove([fileName])
