@@ -5,7 +5,6 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const file = formData.get("file") as File
     const accessToken = formData.get("accessToken") as string
-    const folderId = formData.get("folderId") as string | null
 
     if (!file || !accessToken) {
       return NextResponse.json({ error: "File and access token required" }, { status: 400 })
@@ -14,7 +13,7 @@ export async function POST(request: NextRequest) {
     // First, upload file metadata
     const metadata = {
       name: file.name,
-      parents: folderId ? [folderId] : undefined,
+      parents: ["appDataFolder"], // Optional: store in app data folder
     }
 
     const metadataResponse = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable", {
@@ -35,7 +34,7 @@ export async function POST(request: NextRequest) {
       throw new Error("No upload URL received")
     }
 
-    // Upload the actual file
+    // Upload file content
     const fileBuffer = await file.arrayBuffer()
     const uploadResponse = await fetch(uploadUrl, {
       method: "PUT",
@@ -49,16 +48,8 @@ export async function POST(request: NextRequest) {
       throw new Error(`Failed to upload file: ${uploadResponse.statusText}`)
     }
 
-    const uploadResult = await uploadResponse.json()
-
-    return NextResponse.json({
-      success: true,
-      file: {
-        id: uploadResult.id,
-        name: uploadResult.name,
-        size: uploadResult.size,
-      },
-    })
+    const result = await uploadResponse.json()
+    return NextResponse.json(result)
   } catch (error) {
     console.error("Error uploading to Google Drive:", error)
     return NextResponse.json({ error: "Failed to upload file" }, { status: 500 })

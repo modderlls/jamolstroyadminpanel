@@ -1,11 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClient()
-
-    // Get the current session
+    // Get the current session from client-side
     const {
       data: { session },
       error: sessionError,

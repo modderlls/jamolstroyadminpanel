@@ -1,14 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 
-export async function POST(request: NextRequest) {
+export async function DELETE(request: NextRequest) {
   try {
-    const { accessToken, fileId } = await request.json()
+    const { searchParams } = new URL(request.url)
+    const fileId = searchParams.get("fileId")
+    const accessToken = searchParams.get("accessToken")
 
-    if (!accessToken || !fileId) {
-      return NextResponse.json({ error: "Access token and file ID required" }, { status: 400 })
+    if (!fileId || !accessToken) {
+      return NextResponse.json({ error: "File ID and access token required" }, { status: 400 })
     }
 
-    // Delete file from Google Drive
     const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
       method: "DELETE",
       headers: {
