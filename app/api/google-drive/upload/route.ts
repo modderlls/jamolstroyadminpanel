@@ -1,63 +1,78 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { google } from "googleapis"
-import { Readable } from "stream"
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
     const file = formData.get("file") as File
+    const accessToken = formData.get("accessToken") as string
+    const folderId = formData.get("folderId") as string | null
 
-    if (!file) {
-      return NextResponse.json({ success: false, error: "No file provided" }, { status: 400 })
+    if (!file || !accessToken) {
+      return NextResponse.json(
+        {
+          error: "File and access token required",
+        },
+        { status: 400 },
+      )
     }
 
-    // Get Google Drive credentials from environment variables
-    const credentials = {
-      type: process.env.GOOGLE_SERVICE_ACCOUNT_TYPE,
-      project_id: process.env.GOOGLE_PROJECT_ID,
-      private_key_id: process.env.GOOGLE_PRIVATE_KEY_ID,
-      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-      client_email: process.env.GOOGLE_CLIENT_EMAIL,
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      auth_uri: process.env.GOOGLE_AUTH_URI,
-      token_uri: process.env.GOOGLE_TOKEN_URI,
-      auth_provider_x509_cert_url: process.env.GOOGLE_AUTH_PROVIDER_CERT_URL,
-      client_x509_cert_url: process.env.GOOGLE_CLIENT_CERT_URL,
-      universe_domain: process.env.GOOGLE_UNIVERSE_DOMAIN,
+    // Create file metadata
+    const metadata = {
+      name: file.name,
+      parents: folderId ? [folderId] : undefined,
     }
 
-    // Create JWT auth
-    const auth = new google.auth.JWT(credentials.client_email, undefined, credentials.private_key, [
-      "https://www.googleapis.com/auth/drive",
-    ])
-
-    const drive = google.drive({ version: "v3", auth })
-
-    // Convert File to Buffer then to Readable stream
-    const fileBuffer = Buffer.from(await file.arrayBuffer())
-    const fileStream = Readable.from(fileBuffer)
-
-    // Get folder ID from environment or use root
-    const FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || "root"
-
-    const response = await drive.files.create({
-      requestBody: {
-        name: file.name,
-        parents: [FOLDER_ID],
+    // Step 1: Create resumable upload session
+    const initResponse = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-      media: {
-        mimeType: file.type,
-        body: fileStream,
-      },
+      body: JSON.stringify(metadata),
     })
+
+    if (!initResponse.ok) {
+      throw new Error(`Failed to initiate upload: ${initResponse.statusText}`)
+    }
+
+    const uploadUrl = initResponse.headers.get("location")
+    if (!uploadUrl) {
+      throw new Error("No upload URL received from Google Drive")
+    }
+
+    // Step 2: Upload file content
+    const fileBuffer = await file.arrayBuffer()
+    const uploadResponse = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type || "application/octet-stream",
+      },
+      body: fileBuffer,
+    })
+
+    if (!uploadResponse.ok) {
+      throw new Error(`Failed to upload file: ${uploadResponse.statusText}`)
+    }
+
+    const result = await uploadResponse.json()
 
     return NextResponse.json({
       success: true,
-      fileId: response.data.id,
-      fileName: file.name,
+      file: {
+        id: result.id,
+        name: result.name,
+        size: result.size,
+        mimeType: result.mimeType,
+      },
     })
   } catch (error) {
     console.error("Error uploading to Google Drive:", error)
-    return NextResponse.json({ success: false, error: "Upload failed" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Failed to upload file to Google Drive",
+      },
+      { status: 500 },
+    )
   }
 }

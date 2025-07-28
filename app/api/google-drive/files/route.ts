@@ -1,68 +1,59 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { google } from "googleapis"
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const {
-      GOOGLE_SERVICE_ACCOUNT_TYPE,
-      GOOGLE_PROJECT_ID,
-      GOOGLE_PRIVATE_KEY_ID,
-      GOOGLE_PRIVATE_KEY,
-      GOOGLE_CLIENT_EMAIL,
-      GOOGLE_CLIENT_ID,
-      GOOGLE_AUTH_URI,
-      GOOGLE_TOKEN_URI,
-      GOOGLE_AUTH_PROVIDER_CERT_URL,
-      GOOGLE_CLIENT_CERT_URL,
-      GOOGLE_UNIVERSE_DOMAIN,
-    } = process.env
+    const { accessToken } = await request.json()
 
-    if (
-      !GOOGLE_PRIVATE_KEY ||
-      !GOOGLE_CLIENT_EMAIL ||
-      !GOOGLE_PROJECT_ID
-    ) {
-      throw new Error("Google credentials are missing from environment variables")
+    if (!accessToken) {
+      return NextResponse.json({ error: "Access token required" }, { status: 400 })
     }
 
-    const credentials = {
-      type: GOOGLE_SERVICE_ACCOUNT_TYPE,
-      project_id: GOOGLE_PROJECT_ID,
-      private_key_id: GOOGLE_PRIVATE_KEY_ID,
-      private_key: GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-      client_email: GOOGLE_CLIENT_EMAIL,
-      client_id: GOOGLE_CLIENT_ID,
-      auth_uri: GOOGLE_AUTH_URI,
-      token_uri: GOOGLE_TOKEN_URI,
-      auth_provider_x509_cert_url: GOOGLE_AUTH_PROVIDER_CERT_URL,
-      client_x509_cert_url: GOOGLE_CLIENT_CERT_URL,
-      universe_domain: GOOGLE_UNIVERSE_DOMAIN,
-    }
-
-    const auth = new google.auth.JWT(
-      credentials.client_email,
-      undefined,
-      credentials.private_key,
-      ["https://www.googleapis.com/auth/drive"]
+    // Fetch files from Google Drive
+    const response = await fetch(
+      "https://www.googleapis.com/drive/v3/files?" +
+        "pageSize=100&" +
+        "fields=files(id,name,size,mimeType,createdTime,modifiedTime,webViewLink,thumbnailLink)&" +
+        "orderBy=modifiedTime desc",
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      },
     )
 
-    const drive = google.drive({ version: "v3", auth })
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("Google Drive API error:", errorText)
+      throw new Error(`Google Drive API error: ${response.status} ${response.statusText}`)
+    }
 
-    const response = await drive.files.list({
-      pageSize: 100,
-      fields: "nextPageToken, files(id, name, size, mimeType, createdTime)",
-      orderBy: "createdTime desc",
-    })
+    const data = await response.json()
+
+    // Transform files to our format
+    const files =
+      data.files?.map((file: any) => ({
+        id: file.id,
+        name: file.name,
+        size: file.size ? Number.parseInt(file.size) : undefined,
+        mimeType: file.mimeType,
+        created_at: file.createdTime,
+        updated_at: file.modifiedTime,
+        webViewLink: file.webViewLink,
+        thumbnailLink: file.thumbnailLink,
+      })) || []
 
     return NextResponse.json({
       success: true,
-      files: response.data.files ?? [],
+      files,
     })
-  } catch (error: any) {
-    console.error("Error fetching Google Drive files:", error.message || error)
+  } catch (error) {
+    console.error("Error fetching Google Drive files:", error)
     return NextResponse.json(
-      { success: false, error: "Failed to fetch files" },
-      { status: 500 }
+      {
+        error: "Failed to fetch files from Google Drive",
+      },
+      { status: 500 },
     )
   }
 }
