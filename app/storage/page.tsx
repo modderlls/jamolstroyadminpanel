@@ -22,42 +22,89 @@ import {
   Loader2,
   Save,
   RefreshCw,
+  Eye,
+  Download,
 } from "lucide-react"
 
-interface StorageSettings {
-  storage_provider: "supabase" | "google_drive"
-  google_drive_folder_id?: string
-  updated_at: string
+interface StorageFile {
+  name: string
+  size?: number
+  created_at?: string
+  updated_at?: string
+  id?: string
 }
 
 export default function StoragePage() {
-  const [files, setFiles] = useState<any[]>([])
+  const [files, setFiles] = useState<StorageFile[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
-  const [storageSettings, setStorageSettings] = useState<StorageSettings>({
-    storage_provider: "supabase",
-    updated_at: new Date().toISOString(),
-  })
   const [showSettings, setShowSettings] = useState(false)
   const [settingsPassword, setSettingsPassword] = useState("")
   const [settingsError, setSettingsError] = useState("")
   const [settingsLoading, setSettingsLoading] = useState(false)
   const [settingsVerified, setSettingsVerified] = useState(false)
+  const [storageProvider, setStorageProvider] = useState<"supabase" | "google_drive">("supabase")
+  const [googleDriveFolderId, setGoogleDriveFolderId] = useState("")
   const [savingSettings, setSavingSettings] = useState(false)
 
+  // MD Password protection for viewing files
+  const [viewPassword, setViewPassword] = useState("")
+  const [viewError, setViewError] = useState("")
+  const [viewLoading, setViewLoading] = useState(false)
+  const [viewVerified, setViewVerified] = useState(false)
+
   useEffect(() => {
-    fetchFiles()
     loadStorageSettings()
   }, [])
+
+  useEffect(() => {
+    if (viewVerified) {
+      fetchFiles()
+    }
+  }, [viewVerified, storageProvider])
 
   const loadStorageSettings = () => {
     const saved = localStorage.getItem("storage_settings")
     if (saved) {
       try {
-        setStorageSettings(JSON.parse(saved))
+        const settings = JSON.parse(saved)
+        setStorageProvider(settings.storage_provider || "supabase")
+        setGoogleDriveFolderId(settings.google_drive_folder_id || "")
       } catch (error) {
         console.error("Error loading storage settings:", error)
       }
+    }
+  }
+
+  const verifyViewAccess = async () => {
+    if (!viewPassword) {
+      setViewError("MD parolni kiriting")
+      return
+    }
+
+    setViewLoading(true)
+    setViewError("")
+
+    try {
+      const response = await fetch("/api/md-password/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: viewPassword }),
+      })
+
+      const data = await response.json()
+
+      if (data.valid) {
+        setViewVerified(true)
+        setViewPassword("")
+      } else {
+        setViewError(data.error || "Noto'g'ri parol")
+      }
+    } catch (error) {
+      console.error("Error verifying access:", error)
+      setViewError("Parolni tekshirishda xatolik yuz berdi")
+    } finally {
+      setViewLoading(false)
     }
   }
 
@@ -65,17 +112,19 @@ export default function StoragePage() {
     try {
       setLoading(true)
 
-      if (storageSettings.storage_provider === "google_drive") {
+      if (storageProvider === "google_drive") {
         const response = await fetch("/api/google-drive/files")
         const data = await response.json()
         setFiles(data.files || [])
       } else {
+        // Supabase Storage
         const { data, error } = await supabase.storage.from("products").list()
         if (error) throw error
         setFiles(data || [])
       }
     } catch (error) {
       console.error("Error fetching files:", error)
+      setFiles([])
     } finally {
       setLoading(false)
     }
@@ -117,12 +166,12 @@ export default function StoragePage() {
     setSavingSettings(true)
     try {
       const newSettings = {
-        ...storageSettings,
+        storage_provider: storageProvider,
+        google_drive_folder_id: googleDriveFolderId,
         updated_at: new Date().toISOString(),
       }
 
       localStorage.setItem("storage_settings", JSON.stringify(newSettings))
-      setStorageSettings(newSettings)
 
       // Refresh files with new storage provider
       await fetchFiles()
@@ -145,7 +194,7 @@ export default function StoragePage() {
     setUploading(true)
     try {
       for (const file of Array.from(files)) {
-        if (storageSettings.storage_provider === "google_drive") {
+        if (storageProvider === "google_drive") {
           const formData = new FormData()
           formData.append("file", file)
 
@@ -156,6 +205,7 @@ export default function StoragePage() {
 
           if (!response.ok) throw new Error("Google Drive upload failed")
         } else {
+          // Supabase Storage
           const fileExt = file.name.split(".").pop()
           const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
 
@@ -182,11 +232,11 @@ export default function StoragePage() {
     if (!confirm("Bu faylni o'chirishni tasdiqlaysizmi?")) return
 
     try {
-      if (storageSettings.storage_provider === "google_drive") {
-        // Google Drive delete implementation would go here
+      if (storageProvider === "google_drive") {
         alert("Google Drive fayllarini o'chirish hozircha qo'llab-quvvatlanmaydi")
         return
       } else {
+        // Supabase Storage
         const { error } = await supabase.storage.from("products").remove([fileName])
         if (error) throw error
       }
@@ -197,6 +247,72 @@ export default function StoragePage() {
       console.error("Error deleting file:", error)
       alert("Faylni o'chirishda xatolik yuz berdi")
     }
+  }
+
+  const getFileUrl = (fileName: string) => {
+    if (storageProvider === "google_drive") {
+      return "#" // Google Drive URLs would be handled differently
+    } else {
+      const { data } = supabase.storage.from("products").getPublicUrl(fileName)
+      return data.publicUrl
+    }
+  }
+
+  // If not verified, show password prompt
+  if (!viewVerified) {
+    return (
+      <div className="p-6 bg-background min-h-screen">
+        <div className="max-w-md mx-auto mt-20">
+          <Card className="ios-card">
+            <CardHeader className="text-center">
+              <CardTitle className="flex items-center justify-center gap-2">
+                <Shield className="h-6 w-6 text-orange-600" />
+                Himoyalangan bo'lim
+              </CardTitle>
+              <CardDescription>Xotira boshqaruviga kirish uchun MD parolni kiriting</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {viewError && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-200 text-sm">
+                  {viewError}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="view-password">MD Parol</Label>
+                <Input
+                  id="view-password"
+                  type="password"
+                  value={viewPassword}
+                  onChange={(e) => setViewPassword(e.target.value)}
+                  placeholder="MD parolni kiriting"
+                  pattern="[0-9]*"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      verifyViewAccess()
+                    }
+                  }}
+                />
+              </div>
+
+              <Button onClick={verifyViewAccess} disabled={viewLoading || !viewPassword} className="w-full ios-button">
+                {viewLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Tekshirilmoqda...
+                  </>
+                ) : (
+                  <>
+                    <Key className="h-4 w-4 mr-2" />
+                    Kirish
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -227,20 +343,20 @@ export default function StoragePage() {
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {storageSettings.storage_provider === "google_drive" ? (
+              {storageProvider === "google_drive" ? (
                 <Cloud className="h-8 w-8 text-blue-600" />
               ) : (
                 <Database className="h-8 w-8 text-green-600" />
               )}
               <div>
                 <h3 className="font-semibold">
-                  {storageSettings.storage_provider === "google_drive" ? "Google Drive" : "Supabase Storage"}
+                  {storageProvider === "google_drive" ? "Google Drive" : "Supabase Storage"}
                 </h3>
                 <p className="text-sm text-muted-foreground">Hozirgi xotira provayderi</p>
               </div>
             </div>
-            <Badge variant={storageSettings.storage_provider === "google_drive" ? "default" : "secondary"}>
-              {storageSettings.storage_provider === "google_drive" ? "Bulutli" : "Mahalliy"}
+            <Badge variant={storageProvider === "google_drive" ? "default" : "secondary"}>
+              {storageProvider === "google_drive" ? "Bulutli" : "Mahalliy"}
             </Badge>
           </div>
         </CardContent>
@@ -282,7 +398,7 @@ export default function StoragePage() {
         <CardHeader>
           <CardTitle>Yuklangan fayllar</CardTitle>
           <CardDescription>
-            {storageSettings.storage_provider === "google_drive" ? "Google Drive" : "Supabase Storage"} dagi fayllar
+            {storageProvider === "google_drive" ? "Google Drive" : "Supabase Storage"} dagi fayllar
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -310,9 +426,38 @@ export default function StoragePage() {
                       {file.size && (
                         <p className="text-sm text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                       )}
+                      {file.created_at && (
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(file.created_at).toLocaleDateString("uz-UZ")}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2">
+                    {storageProvider === "supabase" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(getFileUrl(file.name), "_blank")}
+                        className="ios-button bg-transparent"
+                      >
+                        <Eye className="h-3 w-3" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const url = getFileUrl(file.name)
+                        const a = document.createElement("a")
+                        a.href = url
+                        a.download = file.name
+                        a.click()
+                      }}
+                      className="ios-button bg-transparent"
+                    >
+                      <Download className="h-3 w-3" />
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -396,9 +541,9 @@ export default function StoragePage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <Card
                         className={`cursor-pointer transition-all ${
-                          storageSettings.storage_provider === "supabase" ? "ring-2 ring-primary" : "hover:shadow-md"
+                          storageProvider === "supabase" ? "ring-2 ring-primary" : "hover:shadow-md"
                         }`}
-                        onClick={() => setStorageSettings((prev) => ({ ...prev, storage_provider: "supabase" }))}
+                        onClick={() => setStorageProvider("supabase")}
                       >
                         <CardContent className="p-4 text-center">
                           <Database className="h-8 w-8 mx-auto mb-2 text-green-600" />
@@ -409,11 +554,9 @@ export default function StoragePage() {
 
                       <Card
                         className={`cursor-pointer transition-all ${
-                          storageSettings.storage_provider === "google_drive"
-                            ? "ring-2 ring-primary"
-                            : "hover:shadow-md"
+                          storageProvider === "google_drive" ? "ring-2 ring-primary" : "hover:shadow-md"
                         }`}
-                        onClick={() => setStorageSettings((prev) => ({ ...prev, storage_provider: "google_drive" }))}
+                        onClick={() => setStorageProvider("google_drive")}
                       >
                         <CardContent className="p-4 text-center">
                           <Cloud className="h-8 w-8 mx-auto mb-2 text-blue-600" />
@@ -424,18 +567,13 @@ export default function StoragePage() {
                     </div>
                   </div>
 
-                  {storageSettings.storage_provider === "google_drive" && (
+                  {storageProvider === "google_drive" && (
                     <div className="space-y-2">
                       <Label htmlFor="folder_id">Google Drive papka ID (ixtiyoriy)</Label>
                       <Input
                         id="folder_id"
-                        value={storageSettings.google_drive_folder_id || ""}
-                        onChange={(e) =>
-                          setStorageSettings((prev) => ({
-                            ...prev,
-                            google_drive_folder_id: e.target.value,
-                          }))
-                        }
+                        value={googleDriveFolderId}
+                        onChange={(e) => setGoogleDriveFolderId(e.target.value)}
                         placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
                       />
                       <p className="text-xs text-muted-foreground">Bo'sh qoldirsa, asosiy papkaga saqlanadi</p>

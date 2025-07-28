@@ -286,7 +286,7 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
 
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [hasChanges, currentCell, editingCell, sortedData?.length, hiddenColumns])
+  }, [hasChanges, currentCell, editingCell, sortedData?.length, hiddenColumns, getVisibleColumns])
 
   // Define visible columns based on table
   const getVisibleColumns = () => {
@@ -721,7 +721,8 @@ export function ModderSheet({ data, onDataChange, tableName, categories = [], on
       })
     }
 
-    const newData = [...editedData, ...newRow]
+    // Fix: Use proper array concatenation instead of spread
+    const newData = [...editedData, newRow]
     setEditedData(newData)
     addToHistory(newData)
     setHasChanges(true)

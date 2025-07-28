@@ -3,16 +3,15 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
-import { User, Briefcase, Upload, X, Loader2, Save } from "lucide-react"
+import { Plus, Edit, Save, Loader2 } from "lucide-react"
 import Image from "next/image"
 
 interface Worker {
@@ -20,6 +19,8 @@ interface Worker {
   first_name: string
   last_name: string
   profession_uz: string
+  profession_ru?: string
+  profession_en?: string
   phone_number: string
   experience_years: number
   hourly_rate: number
@@ -28,21 +29,30 @@ interface Worker {
   is_available: boolean
   location: string
   description_uz?: string
+  description_ru?: string
+  description_en?: string
   skills?: string[]
   portfolio_images?: string[]
+  created_at?: string
+  updated_at?: string
 }
 
 interface WorkerDialogProps {
-  worker?: Worker | null
-  onClose: () => void
-  onSaved: () => void
+  worker?: Worker
+  onSave: () => void
+  trigger?: React.ReactNode
 }
 
-export function WorkerDialog({ worker, onClose, onSaved }: WorkerDialogProps) {
+export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [formData, setFormData] = useState<Worker>({
     first_name: "",
     last_name: "",
     profession_uz: "",
+    profession_ru: "",
+    profession_en: "",
     phone_number: "",
     experience_years: 0,
     hourly_rate: 0,
@@ -51,13 +61,11 @@ export function WorkerDialog({ worker, onClose, onSaved }: WorkerDialogProps) {
     is_available: true,
     location: "",
     description_uz: "",
+    description_ru: "",
+    description_en: "",
     skills: [],
     portfolio_images: [],
   })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [uploadingImages, setUploadingImages] = useState(false)
-  const [newSkill, setNewSkill] = useState("")
 
   useEffect(() => {
     if (worker) {
@@ -66,8 +74,28 @@ export function WorkerDialog({ worker, onClose, onSaved }: WorkerDialogProps) {
         skills: worker.skills || [],
         portfolio_images: worker.portfolio_images || [],
       })
+    } else {
+      setFormData({
+        first_name: "",
+        last_name: "",
+        profession_uz: "",
+        profession_ru: "",
+        profession_en: "",
+        phone_number: "",
+        experience_years: 0,
+        hourly_rate: 0,
+        daily_rate: 0,
+        rating: 0,
+        is_available: true,
+        location: "",
+        description_uz: "",
+        description_ru: "",
+        description_en: "",
+        skills: [],
+        portfolio_images: [],
+      })
     }
-  }, [worker])
+  }, [worker, open])
 
   const handleInputChange = (field: keyof Worker, value: any) => {
     setFormData((prev) => ({
@@ -76,11 +104,22 @@ export function WorkerDialog({ worker, onClose, onSaved }: WorkerDialogProps) {
     }))
   }
 
+  const handleSkillsChange = (skillsText: string) => {
+    const skills = skillsText
+      .split(",")
+      .map((skill) => skill.trim())
+      .filter(Boolean)
+    setFormData((prev) => ({
+      ...prev,
+      skills,
+    }))
+  }
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
 
-    setUploadingImages(true)
+    setUploading(true)
     try {
       const uploadedUrls: string[] = []
 
@@ -108,9 +147,9 @@ export function WorkerDialog({ worker, onClose, onSaved }: WorkerDialogProps) {
       }))
     } catch (error) {
       console.error("Error uploading images:", error)
-      setError("Rasmlarni yuklashda xatolik yuz berdi")
+      alert("Rasmlarni yuklashda xatolik yuz berdi")
     } finally {
-      setUploadingImages(false)
+      setUploading(false)
     }
   }
 
@@ -121,353 +160,325 @@ export function WorkerDialog({ worker, onClose, onSaved }: WorkerDialogProps) {
     }))
   }
 
-  const addSkill = () => {
-    if (newSkill.trim() && !formData.skills?.includes(newSkill.trim())) {
-      setFormData((prev) => ({
-        ...prev,
-        skills: [...(prev.skills || []), newSkill.trim()],
-      }))
-      setNewSkill("")
+  const handleSave = async () => {
+    if (!formData.first_name || !formData.last_name || !formData.profession_uz) {
+      alert("Ism, familiya va kasbni to'ldiring")
+      return
     }
-  }
 
-  const removeSkill = (skillToRemove: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      skills: prev.skills?.filter((skill) => skill !== skillToRemove) || [],
-    }))
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
     setLoading(true)
-    setError("")
-
     try {
-      // Validation
-      if (!formData.first_name.trim() || !formData.last_name.trim()) {
-        throw new Error("Ism va familiya majburiy")
-      }
-      if (!formData.profession_uz.trim()) {
-        throw new Error("Kasb majburiy")
-      }
-      if (!formData.phone_number.trim()) {
-        throw new Error("Telefon raqami majburiy")
-      }
-
-      const workerData = {
-        first_name: formData.first_name.trim(),
-        last_name: formData.last_name.trim(),
-        profession_uz: formData.profession_uz.trim(),
-        phone_number: formData.phone_number.trim(),
-        experience_years: formData.experience_years,
-        hourly_rate: formData.hourly_rate,
-        daily_rate: formData.daily_rate,
-        rating: formData.rating,
-        is_available: formData.is_available,
-        location: formData.location.trim(),
-        description_uz: formData.description_uz?.trim() || null,
-        skills: formData.skills || [],
-        portfolio_images: formData.portfolio_images || [],
+      const saveData = {
+        ...formData,
         updated_at: new Date().toISOString(),
       }
 
       if (worker?.id) {
         // Update existing worker
-        const { error } = await supabase.from("workers").update(workerData).eq("id", worker.id)
+        const { error } = await supabase.from("workers").update(saveData).eq("id", worker.id)
         if (error) throw error
       } else {
         // Create new worker
-        const { error } = await supabase.from("workers").insert([workerData])
+        saveData.created_at = new Date().toISOString()
+        const { error } = await supabase.from("workers").insert([saveData])
         if (error) throw error
       }
 
-      onSaved()
-    } catch (error: any) {
+      onSave()
+      setOpen(false)
+    } catch (error) {
       console.error("Error saving worker:", error)
-      setError(error.message || "Ustani saqlashda xatolik yuz berdi")
+      alert("Ishchini saqlashda xatolik yuz berdi")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <Dialog open onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {trigger || (
+          <Button className="ios-button">
+            <Plus className="h-4 w-4 mr-2" />
+            Yangi ishchi
+          </Button>
+        )}
+      </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            {worker ? "Ustani tahrirlash" : "Yangi usta qo'shish"}
+            {worker ? <Edit className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+            {worker ? "Ishchini tahrirlash" : "Yangi ishchi qo'shish"}
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-200 text-sm">
-              {error}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Basic Information */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Asosiy ma'lumotlar</h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="first_name">Ism *</Label>
+                <Input
+                  id="first_name"
+                  value={formData.first_name}
+                  onChange={(e) => handleInputChange("first_name", e.target.value)}
+                  placeholder="Ism"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="last_name">Familiya *</Label>
+                <Input
+                  id="last_name"
+                  value={formData.last_name}
+                  onChange={(e) => handleInputChange("last_name", e.target.value)}
+                  placeholder="Familiya"
+                />
+              </div>
             </div>
-          )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Basic Information */}
-            <Card className="ios-card">
-              <CardContent className="p-6 space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  Asosiy ma'lumotlar
-                </h3>
+            <div className="space-y-2">
+              <Label htmlFor="profession_uz">Kasb (O'zbek) *</Label>
+              <Input
+                id="profession_uz"
+                value={formData.profession_uz}
+                onChange={(e) => handleInputChange("profession_uz", e.target.value)}
+                placeholder="Masalan: Qurilish ustasi"
+              />
+            </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="first_name">Ism *</Label>
-                    <Input
-                      id="first_name"
-                      value={formData.first_name}
-                      onChange={(e) => handleInputChange("first_name", e.target.value)}
-                      placeholder="Ism"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="last_name">Familiya *</Label>
-                    <Input
-                      id="last_name"
-                      value={formData.last_name}
-                      onChange={(e) => handleInputChange("last_name", e.target.value)}
-                      placeholder="Familiya"
-                      required
-                    />
-                  </div>
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="profession_ru">Kasb (Rus)</Label>
+                <Input
+                  id="profession_ru"
+                  value={formData.profession_ru || ""}
+                  onChange={(e) => handleInputChange("profession_ru", e.target.value)}
+                  placeholder="Например: Строитель"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="profession_en">Kasb (Ingliz)</Label>
+                <Input
+                  id="profession_en"
+                  value={formData.profession_en || ""}
+                  onChange={(e) => handleInputChange("profession_en", e.target.value)}
+                  placeholder="Example: Builder"
+                />
+              </div>
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="profession_uz">Kasb *</Label>
-                  <Input
-                    id="profession_uz"
-                    value={formData.profession_uz}
-                    onChange={(e) => handleInputChange("profession_uz", e.target.value)}
-                    placeholder="Masalan: Qurilish ustasi"
-                    required
-                  />
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone_number">Telefon raqami</Label>
+              <Input
+                id="phone_number"
+                value={formData.phone_number}
+                onChange={(e) => handleInputChange("phone_number", e.target.value)}
+                placeholder="+998901234567"
+              />
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone_number">Telefon raqami *</Label>
-                  <Input
-                    id="phone_number"
-                    value={formData.phone_number}
-                    onChange={(e) => handleInputChange("phone_number", e.target.value)}
-                    placeholder="+998901234567"
-                    required
-                  />
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="location">Manzil</Label>
+              <Input
+                id="location"
+                value={formData.location}
+                onChange={(e) => handleInputChange("location", e.target.value)}
+                placeholder="Toshkent, Chilonzor tumani"
+              />
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="location">Manzil</Label>
-                  <Input
-                    id="location"
-                    value={formData.location}
-                    onChange={(e) => handleInputChange("location", e.target.value)}
-                    placeholder="Toshkent shahar"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="is_available">Mavjud</Label>
-                  <Switch
-                    id="is_available"
-                    checked={formData.is_available}
-                    onCheckedChange={(checked) => handleInputChange("is_available", checked)}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Professional Information */}
-            <Card className="ios-card">
-              <CardContent className="p-6 space-y-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Briefcase className="h-4 w-4" />
-                  Professional ma'lumotlar
-                </h3>
-
-                <div className="space-y-2">
-                  <Label htmlFor="experience_years">Tajriba (yil)</Label>
-                  <Input
-                    id="experience_years"
-                    type="number"
-                    min="0"
-                    value={formData.experience_years}
-                    onChange={(e) => handleInputChange("experience_years", Number.parseInt(e.target.value) || 0)}
-                    placeholder="5"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="hourly_rate">Soatlik narx (so'm)</Label>
-                    <Input
-                      id="hourly_rate"
-                      type="number"
-                      min="0"
-                      value={formData.hourly_rate}
-                      onChange={(e) => handleInputChange("hourly_rate", Number.parseInt(e.target.value) || 0)}
-                      placeholder="50000"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="daily_rate">Kunlik narx (so'm)</Label>
-                    <Input
-                      id="daily_rate"
-                      type="number"
-                      min="0"
-                      value={formData.daily_rate}
-                      onChange={(e) => handleInputChange("daily_rate", Number.parseInt(e.target.value) || 0)}
-                      placeholder="400000"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="rating">Reyting (1-5)</Label>
-                  <Input
-                    id="rating"
-                    type="number"
-                    min="0"
-                    max="5"
-                    step="0.1"
-                    value={formData.rating}
-                    onChange={(e) => handleInputChange("rating", Number.parseFloat(e.target.value) || 0)}
-                    placeholder="4.5"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description_uz">Tavsif</Label>
-                  <Textarea
-                    id="description_uz"
-                    value={formData.description_uz || ""}
-                    onChange={(e) => handleInputChange("description_uz", e.target.value)}
-                    placeholder="Usta haqida qo'shimcha ma'lumot..."
-                    rows={3}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="is_available"
+                checked={formData.is_available}
+                onCheckedChange={(checked) => handleInputChange("is_available", checked)}
+              />
+              <Label htmlFor="is_available">Hozir mavjud</Label>
+            </div>
           </div>
 
-          {/* Skills */}
-          <Card className="ios-card">
-            <CardContent className="p-6 space-y-4">
-              <h3 className="font-semibold">Ko'nikmalar</h3>
+          {/* Professional Information */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Professional ma'lumotlar</h3>
 
-              <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="experience_years">Tajriba (yil)</Label>
                 <Input
-                  value={newSkill}
-                  onChange={(e) => setNewSkill(e.target.value)}
-                  placeholder="Yangi ko'nikma qo'shish..."
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault()
-                      addSkill()
-                    }
-                  }}
+                  id="experience_years"
+                  type="number"
+                  min="0"
+                  value={formData.experience_years}
+                  onChange={(e) => handleInputChange("experience_years", Number.parseInt(e.target.value) || 0)}
                 />
-                <Button type="button" onClick={addSkill} variant="outline" className="ios-button bg-transparent">
-                  Qo'shish
-                </Button>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="rating">Reyting (0-5)</Label>
+                <Input
+                  id="rating"
+                  type="number"
+                  min="0"
+                  max="5"
+                  step="0.1"
+                  value={formData.rating}
+                  onChange={(e) => handleInputChange("rating", Number.parseFloat(e.target.value) || 0)}
+                />
+              </div>
+            </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="hourly_rate">Soatlik narx (so'm)</Label>
+                <Input
+                  id="hourly_rate"
+                  type="number"
+                  min="0"
+                  value={formData.hourly_rate}
+                  onChange={(e) => handleInputChange("hourly_rate", Number.parseInt(e.target.value) || 0)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="daily_rate">Kunlik narx (so'm)</Label>
+                <Input
+                  id="daily_rate"
+                  type="number"
+                  min="0"
+                  value={formData.daily_rate}
+                  onChange={(e) => handleInputChange("daily_rate", Number.parseInt(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="skills">Ko'nikmalar (vergul bilan ajrating)</Label>
+              <Input
+                id="skills"
+                value={formData.skills?.join(", ") || ""}
+                onChange={(e) => handleSkillsChange(e.target.value)}
+                placeholder="Qurilish, Ta'mirlash, Elektr ishlari"
+              />
               {formData.skills && formData.skills.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {formData.skills.map((skill) => (
-                    <Badge key={skill} variant="outline" className="flex items-center gap-1">
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {formData.skills.map((skill, index) => (
+                    <Badge key={index} variant="secondary" className="text-xs">
                       {skill}
-                      <button type="button" onClick={() => removeSkill(skill)} className="ml-1 hover:text-destructive">
-                        <X className="h-3 w-3" />
-                      </button>
                     </Badge>
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Portfolio Images */}
-          <Card className="ios-card">
-            <CardContent className="p-6 space-y-4">
-              <h3 className="font-semibold">Portfolio rasmlari</h3>
-
-              <div className="border-2 border-dashed border-border rounded-lg p-4">
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                  id="portfolio-upload"
-                  disabled={uploadingImages}
+            {/* Descriptions */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="description_uz">Tavsif (O'zbek)</Label>
+                <Textarea
+                  id="description_uz"
+                  value={formData.description_uz || ""}
+                  onChange={(e) => handleInputChange("description_uz", e.target.value)}
+                  placeholder="Ishchi haqida qisqacha ma'lumot..."
+                  rows={3}
                 />
-                <label htmlFor="portfolio-upload" className="flex flex-col items-center justify-center cursor-pointer">
-                  {uploadingImages ? (
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  ) : (
-                    <Upload className="h-8 w-8 text-muted-foreground" />
-                  )}
-                  <p className="text-sm font-medium mt-2">
-                    {uploadingImages ? "Yuklanmoqda..." : "Rasmlarni yuklash uchun bosing"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">PNG, JPG, JPEG formatida</p>
-                </label>
               </div>
 
-              {formData.portfolio_images && formData.portfolio_images.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {formData.portfolio_images.map((image, index) => (
-                    <div key={index} className="relative group">
-                      <div className="aspect-square rounded-lg overflow-hidden">
-                        <Image
-                          src={image || "/placeholder.svg"}
-                          alt={`Portfolio ${index + 1}`}
-                          width={200}
-                          height={200}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeImage(index)}
-                        className="absolute top-2 right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Actions */}
-          <div className="flex gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1 ios-button bg-transparent">
-              Bekor qilish
-            </Button>
-            <Button type="submit" disabled={loading} className="flex-1 ios-button">
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saqlanmoqda...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  {worker ? "Yangilash" : "Saqlash"}
-                </>
-              )}
-            </Button>
+              <div className="space-y-2">
+                <Label htmlFor="description_ru">Tavsif (Rus)</Label>
+                <Textarea
+                  id="description_ru"
+                  value={formData.description_ru || ""}
+                  onChange={(e) => handleInputChange("description_ru", e.target.value)}
+                  placeholder="Краткая информация о работнике..."
+                  rows={3}
+                />
+              </div>
+            </div>
           </div>
-        </form>
+        </div>
+
+        {/* Portfolio Images */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Portfolio rasmlari</h3>
+
+          <div className="space-y-4">
+            <div>
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+                id="portfolio-upload"
+                disabled={uploading}
+              />
+              <Button
+                variant="outline"
+                onClick={() => document.getElementById("portfolio-upload")?.click()}
+                disabled={uploading}
+                className="ios-button bg-transparent"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Yuklanmoqda...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Rasm qo'shish
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {formData.portfolio_images && formData.portfolio_images.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {formData.portfolio_images.map((image, index) => (
+                  <div key={index} className="relative group">
+                    <div className="aspect-square rounded-lg overflow-hidden border">
+                      <Image
+                        src={image || "/placeholder.svg"}
+                        alt={`Portfolio ${index + 1}`}
+                        width={200}
+                        height={200}
+                        className="object-cover w-full h-full"
+                      />
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => removeImage(index)}
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex justify-end gap-2 pt-4 border-t">
+          <Button variant="outline" onClick={() => setOpen(false)} className="ios-button bg-transparent">
+            Bekor qilish
+          </Button>
+          <Button onClick={handleSave} disabled={loading} className="ios-button">
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saqlanmoqda...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Saqlash
+              </>
+            )}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   )
