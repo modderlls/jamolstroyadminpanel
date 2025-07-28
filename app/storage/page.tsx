@@ -136,7 +136,7 @@ export default function StoragePage() {
 
       const data = await response.json()
 
-      if (data.valid) {
+      if (data.success) {
         setViewVerified(true)
         setViewPassword("")
         toast.success("Kirish muvaffaqiyatli")
@@ -182,7 +182,7 @@ export default function StoragePage() {
       const r2Response = await fetch("/api/r2/storage-info")
       const r2Data = await r2Response.json()
 
-      if (r2data.valid) {
+      if (r2Data.success) {
         setR2Storage(r2Data.storage)
       }
     } catch (error) {
@@ -199,7 +199,7 @@ export default function StoragePage() {
         const response = await fetch("/api/r2/files")
         const data = await response.json()
 
-        if (data.valid) {
+        if (data.success) {
           setFiles(data.files || [])
         } else {
           throw new Error(data.error)
@@ -247,7 +247,7 @@ export default function StoragePage() {
 
       const data = await response.json()
 
-      if (data.valid) {
+      if (data.success) {
         setSettingsVerified(true)
         setSettingsPassword("")
         toast.success("Sozlamalarga kirish muvaffaqiyatli")
@@ -293,20 +293,17 @@ export default function StoragePage() {
   const handleCameraCapture = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }, // Use back camera if available
+        video: { facingMode: "environment" },
       })
 
-      // Create video element
       const video = document.createElement("video")
       video.srcObject = stream
       video.play()
 
-      // Wait for video to load
       await new Promise((resolve) => {
         video.onloadedmetadata = resolve
       })
 
-      // Create canvas and capture frame
       const canvas = document.createElement("canvas")
       canvas.width = video.videoWidth
       canvas.height = video.videoHeight
@@ -314,10 +311,8 @@ export default function StoragePage() {
       const context = canvas.getContext("2d")
       context?.drawImage(video, 0, 0)
 
-      // Stop camera stream
       stream.getTracks().forEach((track) => track.stop())
 
-      // Convert to blob and create file
       canvas.toBlob(
         (blob) => {
           if (blob) {
@@ -356,9 +351,8 @@ export default function StoragePage() {
           })
 
           const data = await response.json()
-          if (!data.valid) throw new Error(data.error)
+          if (!data.success) throw new Error(data.error)
         } else {
-          // Supabase Storage
           const fileExt = file.name.split(".").pop()
           const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
 
@@ -393,9 +387,8 @@ export default function StoragePage() {
         })
 
         const data = await response.json()
-        if (!data.valid) throw new Error(data.error)
+        if (!data.success) throw new Error(data.error)
       } else {
-        // Supabase Storage
         const { error } = await supabase.storage.from("products").remove([fileName])
         if (error) throw error
       }
@@ -435,7 +428,6 @@ export default function StoragePage() {
     return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`
   }
 
-  // If not verified, show password prompt
   if (!viewVerified) {
     return (
       <div className="p-6 bg-background min-h-screen">
@@ -494,7 +486,6 @@ export default function StoragePage() {
 
   return (
     <div className="p-6 space-y-6 bg-background min-h-screen">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
@@ -515,9 +506,7 @@ export default function StoragePage() {
         </div>
       </div>
 
-      {/* Storage Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Supabase Storage */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -563,7 +552,6 @@ export default function StoragePage() {
           </CardContent>
         </Card>
 
-        {/* Cloudflare R2 Storage */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -610,7 +598,6 @@ export default function StoragePage() {
         </Card>
       </div>
 
-      {/* Current Storage Provider */}
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
@@ -632,7 +619,6 @@ export default function StoragePage() {
         </CardContent>
       </Card>
 
-      {/* File Upload */}
       <Card>
         <CardHeader>
           <CardTitle>Fayl yuklash</CardTitle>
@@ -641,7 +627,6 @@ export default function StoragePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Camera Toggle */}
           <div className="flex items-center space-x-2">
             <Switch id="camera-mode" checked={useCamera} onCheckedChange={setUseCamera} />
             <Label htmlFor="camera-mode">Kamera rejimi</Label>
@@ -702,7 +687,6 @@ export default function StoragePage() {
         </CardContent>
       </Card>
 
-      {/* Files List */}
       <Card>
         <CardHeader>
           <CardTitle>Yuklangan fayllar</CardTitle>
@@ -780,7 +764,6 @@ export default function StoragePage() {
         </CardContent>
       </Card>
 
-      {/* Settings Dialog */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <Card className="w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
@@ -842,7 +825,6 @@ export default function StoragePage() {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* Current Provider */}
                   <div className="space-y-4">
                     <Label>Hozirgi fayl yuklash provayderi</Label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -874,11 +856,9 @@ export default function StoragePage() {
                     </div>
                   </div>
 
-                  {/* Specific Storage Settings */}
                   <div className="space-y-4">
                     <Label>Maxsus xotira sozlamalari</Label>
 
-                    {/* Product Storage */}
                     <div className="space-y-2">
                       <Label className="flex items-center gap-2">
                         <ImageIcon className="h-4 w-4" />
@@ -902,7 +882,6 @@ export default function StoragePage() {
                       </div>
                     </div>
 
-                    {/* Worker Storage */}
                     <div className="space-y-2">
                       <Label className="flex items-center gap-2">
                         <Users className="h-4 w-4" />

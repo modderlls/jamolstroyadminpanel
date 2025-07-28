@@ -5,15 +5,15 @@ import { r2Client, R2_BUCKET_NAME } from "@/lib/r2-client"
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const fileKey = searchParams.get("key")
+    const key = searchParams.get("key")
 
-    if (!fileKey) {
-      return NextResponse.json({ success: false, error: "File key is required" }, { status: 400 })
+    if (!key) {
+      return NextResponse.json({ success: false, error: "No file key provided" }, { status: 400 })
     }
 
     const command = new DeleteObjectCommand({
       Bucket: R2_BUCKET_NAME,
-      Key: fileKey,
+      Key: key,
     })
 
     await r2Client.send(command)

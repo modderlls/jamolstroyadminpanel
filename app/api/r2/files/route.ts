@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
         size: object.Size || 0,
         created_at: object.LastModified?.toISOString(),
         updated_at: object.LastModified?.toISOString(),
-        mimeType: "application/octet-stream", // R2 doesn't store MIME type by default
+        mimeType: "application/octet-stream",
         url: `https://8c83f8ed5e85977f5fbdb4e09366d010.r2.cloudflarestorage.com/${R2_BUCKET_NAME}/${object.Key}`,
       })) || []
 

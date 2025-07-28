@@ -10,22 +10,28 @@ export async function GET(request: NextRequest) {
 
     const response = await r2Client.send(command)
 
-    const totalFiles = response.KeyCount || 0
-    const totalSize = response.Contents?.reduce((sum, object) => sum + (object.Size || 0), 0) || 0
+    let totalSize = 0
+    let totalFiles = 0
 
-    // R2 has generous limits, but we'll show some stats
-    const maxStorage = 10 * 1024 * 1024 * 1024 // 10GB for display purposes
-    const usedPercentage = (totalSize / maxStorage) * 100
+    if (response.Contents) {
+      totalFiles = response.Contents.length
+      totalSize = response.Contents.reduce((sum, object) => sum + (object.Size || 0), 0)
+    }
+
+    const maxStorage = 10 * 1024 * 1024 * 1024 // 10GB limit
+    const totalSizeGB = (totalSize / (1024 * 1024 * 1024)).toFixed(2)
+    const maxStorageGB = (maxStorage / (1024 * 1024 * 1024)).toFixed(0)
+    const usedPercentage = ((totalSize / maxStorage) * 100).toFixed(1)
 
     return NextResponse.json({
       success: true,
       storage: {
         totalFiles,
         totalSize,
-        totalSizeGB: (totalSize / (1024 * 1024 * 1024)).toFixed(2),
+        totalSizeGB,
         maxStorage,
-        maxStorageGB: (maxStorage / (1024 * 1024 * 1024)).toFixed(0),
-        usedPercentage: Math.min(usedPercentage, 100).toFixed(1),
+        maxStorageGB,
+        usedPercentage,
         bucketName: R2_BUCKET_NAME,
       },
     })
