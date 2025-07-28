@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,7 +15,6 @@ import { supabase } from "@/lib/supabase"
 import Image from "next/image"
 import { CategorySelector } from "@/components/categories/category-selector"
 import { toast } from "sonner"
-import Webcam from "react-webcam" // Import Webcam
 
 interface Product {
   id: string
@@ -34,6 +33,8 @@ interface Product {
   minimum_order: number
   category_id: string
   specifications?: Record<string, Array<{ name: string; value: string; price?: number }>>
+  rental_time_unit?: string
+  rental_duration?: number
 }
 
 interface Category {
@@ -71,8 +72,9 @@ export function ProductDialog({
   const [loading, setLoading] = useState(false)
   const [uploadingImages, setUploadingImages] = useState(false)
   const [useCamera, setUseCamera] = useState(false)
-  const webcamRef = useRef<Webcam | null>(null) // Use Webcam ref
   const [showCameraPreview, setShowCameraPreview] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
   const [formData, setFormData] = useState({
     name_uz: "",
@@ -90,11 +92,12 @@ export function ProductDialog({
     minimum_order: 1,
     category_id: "",
     specifications: {} as Record<string, SpecificationItem[]>,
+    rental_time_unit: "day",
+    rental_duration: 1,
   })
 
   // Specifications state
   const [newSpecType, setNewSpecType] = useState("")
-  const [editingSpec, setEditingSpec] = useState<string | null>(null)
 
   useEffect(() => {
     if (product) {
@@ -114,6 +117,8 @@ export function ProductDialog({
         minimum_order: product.minimum_order || 1,
         category_id: product.category_id || "",
         specifications: product.specifications || {},
+        rental_time_unit: product.rental_time_unit || "day",
+        rental_duration: product.rental_duration || 1,
       })
     } else {
       setFormData({
@@ -132,17 +137,20 @@ export function ProductDialog({
         minimum_order: 1,
         category_id: "",
         specifications: {},
+        rental_time_unit: "day",
+        rental_duration: 1,
       })
     }
   }, [product])
 
-  // Cleanup camera stream when dialog closes or component unmounts
+  // Cleanup camera stream when dialog closes
   useEffect(() => {
-    if (!open && showCameraPreview) {
-      // If dialog closes, hide camera preview
+    if (!open && streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
       setShowCameraPreview(false)
     }
-  }, [open, showCameraPreview])
+  }, [open])
 
   const getStorageProvider = () => {
     const settings = localStorage.getItem("storage_settings")
@@ -157,49 +165,52 @@ export function ProductDialog({
     return "supabase"
   }
 
-  // Define video constraints for the rear camera
-  const videoConstraints = {
-    facingMode: "environment", // This specifies the rear camera
-    width: { ideal: 1280 },
-    height: { ideal: 720 },
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      })
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        streamRef.current = stream
+        setShowCameraPreview(true)
+      }
+    } catch (error) {
+      console.error("Camera error:", error)
+      toast.error("Kameraga kirish xatoligi")
+    }
   }
 
-  const handleCameraOnUserMedia = useCallback(() => {
-    setShowCameraPreview(true);
-  }, []);
-
-  const handleCameraOnUserMediaError = useCallback((error: any) => {
-    console.error("Camera error:", error);
-    if (error.name === "NotAllowedError") {
-      toast.error("Kameraga kirishga ruxsat berilmadi. Iltimos, brauzer sozlamalarini tekshiring.");
-    } else if (error.name === "NotFoundError") {
-      toast.error("Kamera topilmadi. Qurilmangizda kamera mavjudligiga ishonch hosil qiling.");
-    } else if (error.name === "NotReadableError") {
-      toast.error("Kamera allaqachon ishlatilmoqda.");
-    } else {
-      toast.error("Kameraga kirishda kutilmagan xatolik: " + error.message);
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
     }
-    setShowCameraPreview(false); // Hide camera preview on error
-  }, []);
-
+    setShowCameraPreview(false)
+  }
 
   const capturePhoto = useCallback(async () => {
-    if (webcamRef.current) {
-      const imageSrc = webcamRef.current.getScreenshot();
-      if (imageSrc) {
-        // Convert base64 image to Blob
-        const response = await fetch(imageSrc);
-        const blob = await response.blob();
-        const file = new File([blob], `camera-${Date.now()}.jpeg`, { type: "image/jpeg" });
-        await uploadSingleImage(file);
-      } else {
-        toast.error("Rasmga olishda xatolik yuz berdi. Rasmingiz bo'sh bo'lishi mumkin.");
-      }
-    } else {
-      toast.error("Kamera tayyor emas. Bir oz kuting yoki qayta urinib ko'ring.");
-    }
-  }, [webcamRef]);
+    if (videoRef.current) {
+      const canvas = document.createElement("canvas")
+      canvas.width = videoRef.current.videoWidth
+      canvas.height = videoRef.current.videoHeight
 
+      const context = canvas.getContext("2d")
+      context?.drawImage(videoRef.current, 0, 0)
+
+      canvas.toBlob(
+        async (blob) => {
+          if (blob) {
+            const file = new File([blob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" })
+            await uploadSingleImage(file)
+          }
+        },
+        "image/jpeg",
+        0.8,
+      )
+    }
+  }, [])
 
   const uploadSingleImage = async (file: File) => {
     setUploadingImages(true)
@@ -325,7 +336,6 @@ export function ProductDialog({
     }))
 
     setNewSpecType("")
-    setEditingSpec(newSpecType)
   }
 
   const removeSpecificationType = (specType: string) => {
@@ -408,6 +418,9 @@ export function ProductDialog({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{product ? "Mahsulotni tahrirlash" : "Yangi mahsulot qo'shish"}</DialogTitle>
+          <DialogDescription>
+            {product ? "Mavjud mahsulot ma'lumotlarini tahrirlang" : "Yangi mahsulot ma'lumotlarini kiriting"}
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -424,7 +437,11 @@ export function ProductDialog({
                   checked={useCamera}
                   onCheckedChange={(checked) => {
                     setUseCamera(checked)
-                    setShowCameraPreview(checked) // Directly control camera preview visibility
+                    if (checked) {
+                      startCamera()
+                    } else {
+                      stopCamera()
+                    }
                   }}
                 />
                 <Label htmlFor="camera-mode">Kamera rejimi</Label>
@@ -432,33 +449,35 @@ export function ProductDialog({
 
               {useCamera && (
                 <div className="space-y-4">
-                  {/* Camera Preview using Webcam component */}
+                  {/* Camera Preview */}
                   <div className="relative bg-black rounded-lg overflow-hidden">
-                    {showCameraPreview && (
-                      <Webcam
-                        audio={false}
-                        ref={webcamRef}
-                        screenshotFormat="image/jpeg"
-                        videoConstraints={videoConstraints}
-                        onUserMedia={handleCameraOnUserMedia}
-                        onUserMediaError={handleCameraOnUserMediaError}
-                        className="w-full h-64 object-contain" // Use object-contain
-                      />
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-64 object-cover"
+                      style={{ display: showCameraPreview ? "block" : "none" }}
+                    />
+                    {!showCameraPreview && (
+                      <div className="w-full h-64 flex items-center justify-center">
+                        <p className="text-white">Kamera yuklanmoqda...</p>
+                      </div>
                     )}
                   </div>
 
                   {/* Camera Controls */}
                   <div className="flex gap-2">
-                    <Button type="button" onClick={capturePhoto} disabled={uploadingImages || !showCameraPreview} className="flex-1">
+                    <Button
+                      type="button"
+                      onClick={capturePhoto}
+                      disabled={uploadingImages || !showCameraPreview}
+                      className="flex-1"
+                    >
                       <Camera className="h-4 w-4 mr-2" />
                       {uploadingImages ? "Yuklanmoqda..." : "Rasmga olish"}
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowCameraPreview(false)} // Simply hide camera preview
-                      disabled={!showCameraPreview}
-                    >
+                    <Button type="button" variant="outline" onClick={stopCamera} disabled={!showCameraPreview}>
                       <StopCircle className="h-4 w-4 mr-2" />
                       To'xtatish
                     </Button>
@@ -466,7 +485,7 @@ export function ProductDialog({
                 </div>
               )}
 
-              {!useCamera && ( // Show file upload only if camera mode is off
+              {!useCamera && (
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
                   <input
                     type="file"
@@ -588,6 +607,44 @@ export function ProductDialog({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Rental specific fields */}
+                {formData.product_type === "rental" && (
+                  <div className="space-y-4 p-3 bg-muted/30 rounded-lg">
+                    <h4 className="font-medium text-sm">Ijara sozlamalari</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="rental_time_unit">Vaqt birligi</Label>
+                        <Select
+                          value={formData.rental_time_unit}
+                          onValueChange={(value) => setFormData((prev) => ({ ...prev, rental_time_unit: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="hour">Soat</SelectItem>
+                            <SelectItem value="day">Kun</SelectItem>
+                            <SelectItem value="week">Hafta</SelectItem>
+                            <SelectItem value="month">Oy</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="rental_duration">Muddati</Label>
+                        <Input
+                          id="rental_duration"
+                          type="number"
+                          min="1"
+                          value={formData.rental_duration}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, rental_duration: Number(e.target.value) }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="unit">O'lchov birligi *</Label>

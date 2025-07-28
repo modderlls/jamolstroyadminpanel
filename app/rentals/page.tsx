@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import {
   Search,
   Filter,
@@ -15,119 +17,92 @@ import {
   User,
   MapPin,
   Phone,
-  Package,
-  CreditCard,
   CheckCircle,
-  AlertTriangle,
   PhoneCall,
   RefreshCw,
+  RotateCcw,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ModderSheet } from "@/components/moddersheet/modder-sheet"
+import { toast } from "sonner"
 
-interface Rental {
+interface RentalItem {
   id: string
-  order_number: string
-  customer_name: string
-  customer_phone: string
-  delivery_address: string
-  status: string
-  total_amount: number
-  rental_start_date: string
-  rental_end_date: string
+  order_id: string
+  product_id: string
+  quantity: number
+  unit_price: number
+  total_price: number
   rental_duration: number
-  rental_price_per_day: number
-  deposit_amount: number
-  is_deposit_paid: boolean
-  is_returned: boolean
-  return_date: string
-  condition_on_return: string
-  late_return_fee: number
-  damage_fee: number
+  rental_time_unit: string
+  was_returned: boolean
+  return_date?: string
   created_at: string
   updated_at: string
-  order_items: Array<{
-    id: string
-    quantity: number
-    unit_price: number
-    total_price: number
-    products: {
-      name_uz: string
-      images: string[]
-    }
-  }>
-}
-
-const statusColors = {
-  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  confirmed: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  processing: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  shipped: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
-  delivered: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  returned: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
-  cancelled: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-}
-
-const statusLabels = {
-  pending: "Kutilmoqda",
-  confirmed: "Tasdiqlangan",
-  processing: "Tayyorlanmoqda",
-  shipped: "Yetkazilmoqda",
-  delivered: "Berilgan",
-  returned: "Qaytarilgan",
-  cancelled: "Bekor qilingan",
+  products: {
+    name_uz: string
+    images: string[]
+  }
+  orders: {
+    order_number: string
+    customer_name: string
+    customer_phone: string
+    delivery_address: string
+    status: string
+    total_amount: number
+    created_at: string
+    updated_at: string
+  }
 }
 
 export default function RentalsPage() {
-  const [rentals, setRentals] = useState<Rental[]>([])
+  const [rentals, setRentals] = useState<RentalItem[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
-  const [activeTab, setActiveTab] = useState("list")
+  const [activeTab, setActiveTab] = useState("current")
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("")
-  const [returnFilter, setReturnFilter] = useState("")
+  const [overdueFilter, setOverdueFilter] = useState("")
   const [dateFilter, setDateFilter] = useState("")
+
+  // MD Password Dialog
+  const [mdPasswordDialogOpen, setMdPasswordDialogOpen] = useState(false)
+  const [mdPassword, setMdPassword] = useState("")
+  const [selectedRentalId, setSelectedRentalId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchRentals()
-  }, [searchQuery, statusFilter, returnFilter, dateFilter])
+  }, [searchQuery, statusFilter, overdueFilter, dateFilter, activeTab])
 
   const fetchRentals = async () => {
     try {
-      let query = supabase.from("orders").select(
+      let query = supabase.from("order_items").select(
         `
           *,
-          order_items(
-            id,
-            quantity,
-            unit_price,
-            total_price,
-            products(name_uz, images)
-          )
+          products!inner(name_uz, images),
+          orders!inner(order_number, customer_name, customer_phone, delivery_address, status, total_amount, created_at, updated_at)
         `,
       )
 
-      // Only get rental orders
-      query = query.eq("product_type", "rental")
+      // Only get rental items with rental_duration not null
+      query = query.not("rental_duration", "is", null)
 
-      // Apply filters
+      // Filter by status - only confirmed orders
+      query = query.eq("orders.status", "confirmed")
+
+      // Filter by return status based on active tab
+      if (activeTab === "current") {
+        query = query.eq("was_returned", false)
+      } else if (activeTab === "returned") {
+        query = query.eq("was_returned", true)
+      }
+
+      // Apply search filters
       if (searchQuery) {
         query = query.or(
-          `order_number.ilike.%${searchQuery}%,customer_name.ilike.%${searchQuery}%,customer_phone.ilike.%${searchQuery}%`,
+          `orders.order_number.ilike.%${searchQuery}%,orders.customer_name.ilike.%${searchQuery}%,orders.customer_phone.ilike.%${searchQuery}%,products.name_uz.ilike.%${searchQuery}%`,
         )
-      }
-
-      if (statusFilter) {
-        query = query.eq("status", statusFilter)
-      }
-
-      if (returnFilter) {
-        if (returnFilter === "returned") {
-          query = query.eq("is_returned", true)
-        } else if (returnFilter === "not_returned") {
-          query = query.eq("is_returned", false)
-        }
       }
 
       if (dateFilter) {
@@ -142,33 +117,62 @@ export default function RentalsPage() {
           startDate.setMonth(today.getMonth() - 1)
         }
 
-        query = query.gte("created_at", startDate.toISOString())
+        query = query.gte("orders.created_at", startDate.toISOString())
       }
 
-      const { data, error } = await query.order("created_at", { ascending: false })
+      const { data, error } = await query.order("orders.updated_at", { ascending: false })
 
       if (error) throw error
 
-      // Process rental data
+      // Process rental data to calculate overdue status
       const processedRentals = (data || []).map((rental) => {
-        const startDate = new Date(rental.rental_start_date || rental.created_at)
-        const endDate = new Date(
-          rental.rental_end_date || startDate.getTime() + rental.rental_duration * 24 * 60 * 60 * 1000,
-        )
+        const orderDate = new Date(rental.orders.updated_at)
         const today = new Date()
-        const isOverdue = !rental.is_returned && endDate < today
+
+        // Calculate rental end date based on time unit
+        const rentalEndDate = new Date(orderDate)
+        const duration = rental.rental_duration
+
+        switch (rental.rental_time_unit) {
+          case "hour":
+            rentalEndDate.setHours(rentalEndDate.getHours() + duration)
+            break
+          case "day":
+            rentalEndDate.setDate(rentalEndDate.getDate() + duration)
+            break
+          case "week":
+            rentalEndDate.setDate(rentalEndDate.getDate() + duration * 7)
+            break
+          case "month":
+            rentalEndDate.setMonth(rentalEndDate.getMonth() + duration)
+            break
+          default:
+            rentalEndDate.setDate(rentalEndDate.getDate() + duration)
+        }
+
+        const isOverdue = !rental.was_returned && rentalEndDate < today
+        const remainingTime = rentalEndDate.getTime() - today.getTime()
 
         return {
           ...rental,
-          rental_start_date: startDate.toISOString(),
-          rental_end_date: endDate.toISOString(),
+          rental_end_date: rentalEndDate.toISOString(),
           is_overdue: isOverdue,
+          remaining_time: remainingTime,
         }
       })
 
-      setRentals(processedRentals)
+      // Apply overdue filter
+      let filteredRentals = processedRentals
+      if (overdueFilter === "overdue") {
+        filteredRentals = processedRentals.filter((r) => r.is_overdue)
+      } else if (overdueFilter === "not_overdue") {
+        filteredRentals = processedRentals.filter((r) => !r.is_overdue)
+      }
+
+      setRentals(filteredRentals)
     } catch (error) {
       console.error("Error fetching rentals:", error)
+      toast.error("Arendalarni yuklashda xatolik")
     } finally {
       setLoading(false)
     }
@@ -178,65 +182,89 @@ export default function RentalsPage() {
     window.open(`tel:${phone}`, "_self")
   }
 
-  const handleMarkReturned = async (rentalId: string) => {
-    if (confirm("Bu arendani qaytarilgan deb belgilashni tasdiqlaysizmi?")) {
-      try {
+  const handleReturnProduct = (rentalId: string) => {
+    setSelectedRentalId(rentalId)
+    setMdPasswordDialogOpen(true)
+  }
+
+  const handleMdPasswordSubmit = async () => {
+    try {
+      const response = await fetch("/api/md-password/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: mdPassword }),
+      })
+      const data = await response.json()
+
+      if (data.valid && selectedRentalId) {
+        // Mark as returned
         const { error } = await supabase
-          .from("orders")
+          .from("order_items")
           .update({
-            is_returned: true,
+            was_returned: true,
             return_date: new Date().toISOString(),
-            status: "returned",
             updated_at: new Date().toISOString(),
           })
-          .eq("id", rentalId)
+          .eq("id", selectedRentalId)
 
         if (error) throw error
+
+        toast.success("Mahsulot qaytarilgan deb belgilandi")
+        setMdPasswordDialogOpen(false)
+        setMdPassword("")
+        setSelectedRentalId(null)
         await fetchRentals()
-      } catch (error) {
-        console.error("Error marking rental as returned:", error)
-        alert("Arendani qaytarilgan deb belgilashda xatolik yuz berdi")
+      } else {
+        toast.error("Noto'g'ri parol")
       }
+    } catch (error) {
+      console.error("Error marking as returned:", error)
+      toast.error("Xatolik yuz berdi")
     }
   }
 
   const clearFilters = () => {
     setStatusFilter("")
-    setReturnFilter("")
+    setOverdueFilter("")
     setDateFilter("")
     setSearchQuery("")
   }
 
-  const getRentalStatusColor = (rental: Rental) => {
-    if (rental.is_returned) {
+  const getRentalStatusColor = (rental: any) => {
+    if (rental.was_returned) {
       return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
     } else if (rental.is_overdue) {
       return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-    } else if (rental.status === "delivered") {
-      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
     } else {
-      return statusColors[rental.status as keyof typeof statusColors] || "bg-gray-100 text-gray-800"
+      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
     }
   }
 
-  const getRentalStatusText = (rental: Rental) => {
-    if (rental.is_returned) {
+  const getRentalStatusText = (rental: any) => {
+    if (rental.was_returned) {
       return "Qaytarilgan"
     } else if (rental.is_overdue) {
-      const daysOverdue = Math.ceil(
-        (new Date().getTime() - new Date(rental.rental_end_date).getTime()) / (24 * 60 * 60 * 1000),
-      )
+      const daysOverdue = Math.ceil(Math.abs(rental.remaining_time) / (24 * 60 * 60 * 1000))
       return `${daysOverdue} kun kechikdi`
     } else {
-      return statusLabels[rental.status as keyof typeof statusLabels] || rental.status
+      const remainingDays = Math.ceil(rental.remaining_time / (24 * 60 * 60 * 1000))
+      return `${remainingDays} kun qoldi`
     }
   }
 
-  const calculateRemainingDays = (rental: Rental) => {
-    if (rental.is_returned) return 0
-    const endDate = new Date(rental.rental_end_date)
-    const today = new Date()
-    return Math.ceil((endDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+  const formatTimeUnit = (unit: string) => {
+    switch (unit) {
+      case "hour":
+        return "soat"
+      case "day":
+        return "kun"
+      case "week":
+        return "hafta"
+      case "month":
+        return "oy"
+      default:
+        return unit
+    }
   }
 
   if (loading) {
@@ -271,13 +299,13 @@ export default function RentalsPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex justify-center">
           <TabsList className="grid w-full max-w-md grid-cols-3">
-            <TabsTrigger value="list">Ro'yxat</TabsTrigger>
+            <TabsTrigger value="current">Joriy</TabsTrigger>
+            <TabsTrigger value="returned">Qaytarilgan</TabsTrigger>
             <TabsTrigger value="table">Jadval</TabsTrigger>
-            <TabsTrigger value="analytics">Tahlil</TabsTrigger>
           </TabsList>
         </div>
 
-        <TabsContent value="list">
+        <TabsContent value="current">
           <div className="space-y-6">
             {/* Filters */}
             <Card className="ios-card">
@@ -289,35 +317,20 @@ export default function RentalsPage() {
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Arenda raqami, mijoz..."
+                      placeholder="Arenda raqami, mijoz, mahsulot..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="pl-10"
                     />
                   </div>
 
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <Select value={overdueFilter} onValueChange={setOverdueFilter}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Holat bo'yicha" />
+                      <SelectValue placeholder="Kechikish holati" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pending">Kutilmoqda</SelectItem>
-                      <SelectItem value="confirmed">Tasdiqlangan</SelectItem>
-                      <SelectItem value="processing">Tayyorlanmoqda</SelectItem>
-                      <SelectItem value="shipped">Yetkazilmoqda</SelectItem>
-                      <SelectItem value="delivered">Berilgan</SelectItem>
-                      <SelectItem value="returned">Qaytarilgan</SelectItem>
-                      <SelectItem value="cancelled">Bekor qilingan</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={returnFilter} onValueChange={setReturnFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Qaytarish holati" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="returned">Qaytarilgan</SelectItem>
-                      <SelectItem value="not_returned">Qaytarilmagan</SelectItem>
+                      <SelectItem value="overdue">Kechikkan</SelectItem>
+                      <SelectItem value="not_overdue">Kechikmaganlar</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -331,9 +344,7 @@ export default function RentalsPage() {
                       <SelectItem value="month">So'nggi oy</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
 
-                <div className="flex gap-2">
                   <Button variant="outline" onClick={clearFilters} className="ios-button bg-transparent">
                     <Filter className="h-4 w-4 mr-2" />
                     Tozalash
@@ -349,10 +360,10 @@ export default function RentalsPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div>
-                        <CardTitle className="text-lg font-semibold">#{rental.order_number}</CardTitle>
+                        <CardTitle className="text-lg font-semibold">#{rental.orders.order_number}</CardTitle>
                         <CardDescription className="flex items-center gap-2 mt-1">
                           <Calendar className="h-4 w-4" />
-                          {new Date(rental.created_at).toLocaleDateString("uz-UZ", {
+                          {new Date(rental.orders.created_at).toLocaleDateString("uz-UZ", {
                             year: "numeric",
                             month: "long",
                             day: "numeric",
@@ -363,18 +374,6 @@ export default function RentalsPage() {
                         <Badge className={`${getRentalStatusColor(rental)} border-0`}>
                           {getRentalStatusText(rental)}
                         </Badge>
-                        <div className="flex gap-1">
-                          {rental.is_deposit_paid && (
-                            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
-                              Omonat to'langan
-                            </Badge>
-                          )}
-                          {rental.is_returned && (
-                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                              Qaytarilgan
-                            </Badge>
-                          )}
-                        </div>
                       </div>
                     </div>
                   </CardHeader>
@@ -384,79 +383,38 @@ export default function RentalsPage() {
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 text-sm">
                           <User className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{rental.customer_name}</span>
+                          <span className="font-medium">{rental.orders.customer_name}</span>
                         </div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Phone className="h-4 w-4" />
-                          <span>{rental.customer_phone}</span>
+                          <span>{rental.orders.customer_phone}</span>
                         </div>
                         <div className="flex items-start gap-2 text-sm text-muted-foreground">
                           <MapPin className="h-4 w-4 mt-0.5" />
-                          <span className="line-clamp-2">{rental.delivery_address}</span>
+                          <span className="line-clamp-2">{rental.orders.delivery_address}</span>
                         </div>
                       </div>
 
                       {/* Rental Details */}
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm">
+                          <span>Mahsulot:</span>
+                          <span className="font-medium">{rental.products.name_uz}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Miqdor:</span>
+                          <span className="font-medium">{rental.quantity} dona</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
                           <span>Arenda muddati:</span>
-                          <span className="font-medium">{rental.rental_duration} kun</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span>Kunlik narx:</span>
-                          <span className="font-medium">{rental.rental_price_per_day?.toLocaleString()} so'm</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span>Omonat:</span>
-                          <span className="font-medium">{rental.deposit_amount?.toLocaleString()} so'm</span>
+                          <span className="font-medium">
+                            {rental.rental_duration} {formatTimeUnit(rental.rental_time_unit)}
+                          </span>
                         </div>
                         <div className="flex justify-between text-base font-semibold border-t pt-2">
                           <span>Jami:</span>
-                          <span>{rental.total_amount.toLocaleString()} so'm</span>
+                          <span>{rental.total_price.toLocaleString()} so'm</span>
                         </div>
-                      </div>
-                    </div>
-
-                    {/* Rental Timeline */}
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-medium text-muted-foreground">Arenda muddati:</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div className="text-center p-2 bg-muted/30 rounded-lg">
-                          <p className="text-xs text-muted-foreground">Boshlanish</p>
-                          <p className="font-medium">
-                            {new Date(rental.rental_start_date).toLocaleDateString("uz-UZ")}
-                          </p>
-                        </div>
-                        <div className="text-center p-2 bg-muted/30 rounded-lg">
-                          <p className="text-xs text-muted-foreground">Tugash</p>
-                          <p className="font-medium">{new Date(rental.rental_end_date).toLocaleDateString("uz-UZ")}</p>
-                        </div>
-                        <div className="text-center p-2 bg-muted/30 rounded-lg">
-                          <p className="text-xs text-muted-foreground">Qolgan kunlar</p>
-                          <p className={`font-medium ${calculateRemainingDays(rental) < 0 ? "text-red-600" : ""}`}>
-                            {rental.is_returned ? "Qaytarilgan" : `${calculateRemainingDays(rental)} kun`}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Rental Items */}
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-medium text-muted-foreground">Arenda mahsulotlari:</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {rental.order_items.map((item) => (
-                          <div key={item.id} className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg">
-                            <div className="w-8 h-8 bg-muted rounded flex items-center justify-center">
-                              <Package className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium line-clamp-1">{item.products.name_uz}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {item.quantity} x {item.unit_price.toLocaleString()} so'm
-                              </p>
-                            </div>
-                          </div>
-                        ))}
                       </div>
                     </div>
 
@@ -466,7 +424,7 @@ export default function RentalsPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleCallCustomer(rental.customer_phone)}
+                          onClick={() => handleCallCustomer(rental.orders.customer_phone)}
                           className="ios-button bg-transparent"
                         >
                           <PhoneCall className="h-3 w-3 mr-1" />
@@ -475,14 +433,14 @@ export default function RentalsPage() {
                       </div>
 
                       <div className="flex gap-2">
-                        {!rental.is_returned && rental.status === "delivered" && (
+                        {!rental.was_returned && (
                           <Button
                             size="sm"
-                            onClick={() => handleMarkReturned(rental.id)}
+                            onClick={() => handleReturnProduct(rental.id)}
                             className="ios-button bg-green-600 hover:bg-green-700"
                           >
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            Qaytarildi
+                            <RotateCcw className="h-3 w-3 mr-1" />
+                            Mahsulot qaytarildi
                           </Button>
                         )}
                         <Button variant="outline" size="sm" className="ios-button bg-transparent">
@@ -502,7 +460,124 @@ export default function RentalsPage() {
                   <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                   <h3 className="text-lg font-medium mb-2">Arendalar topilmadi</h3>
                   <p className="text-muted-foreground">
-                    {searchQuery ? "Qidiruv bo'yicha natija yo'q" : "Hozircha arendalar mavjud emas"}
+                    {searchQuery ? "Qidiruv bo'yicha natija yo'q" : "Hozircha joriy arendalar mavjud emas"}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="returned">
+          <div className="space-y-6">
+            {/* Filters */}
+            <Card className="ios-card">
+              <CardHeader>
+                <CardTitle className="text-lg">Filter va qidiruv</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Arenda raqami, mijoz, mahsulot..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+
+                  <Select value={dateFilter} onValueChange={setDateFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sana bo'yicha" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="today">Bugun</SelectItem>
+                      <SelectItem value="week">So'nggi hafta</SelectItem>
+                      <SelectItem value="month">So'nggi oy</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Button variant="outline" onClick={clearFilters} className="ios-button bg-transparent">
+                    <Filter className="h-4 w-4 mr-2" />
+                    Tozalash
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Returned Rentals List */}
+            <div className="space-y-4">
+              {rentals.map((rental) => (
+                <Card key={rental.id} className="ios-card hover:shadow-md transition-all duration-300">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="text-lg font-semibold">#{rental.orders.order_number}</CardTitle>
+                        <CardDescription className="flex items-center gap-2 mt-1">
+                          <Calendar className="h-4 w-4" />
+                          Qaytarilgan:{" "}
+                          {rental.return_date &&
+                            new Date(rental.return_date).toLocaleDateString("uz-UZ", {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            })}
+                        </CardDescription>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-gray-100 text-gray-800 border-0">Qaytarilgan</Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Customer Info */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">{rental.orders.customer_name}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Phone className="h-4 w-4" />
+                          <span>{rental.orders.customer_phone}</span>
+                        </div>
+                      </div>
+
+                      {/* Rental Details */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span>Mahsulot:</span>
+                          <span className="font-medium">{rental.products.name_uz}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Miqdor:</span>
+                          <span className="font-medium">{rental.quantity} dona</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Arenda muddati:</span>
+                          <span className="font-medium">
+                            {rental.rental_duration} {formatTimeUnit(rental.rental_time_unit)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-base font-semibold border-t pt-2">
+                          <span>Jami:</span>
+                          <span>{rental.total_price.toLocaleString()} so'm</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {rentals.length === 0 && (
+              <Card className="ios-card">
+                <CardContent className="text-center py-12">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-lg font-medium mb-2">Qaytarilgan arendalar topilmadi</h3>
+                  <p className="text-muted-foreground">
+                    {searchQuery ? "Qidiruv bo'yicha natija yo'q" : "Hozircha qaytarilgan arendalar mavjud emas"}
                   </p>
                 </CardContent>
               </Card>
@@ -513,77 +588,37 @@ export default function RentalsPage() {
         <TabsContent value="table">
           <ModderSheet data={rentals} onDataChange={setRentals} tableName="rentals" onRefresh={fetchRentals} />
         </TabsContent>
-
-        <TabsContent value="analytics">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="ios-card">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Jami arendalar</p>
-                    <p className="text-2xl font-bold text-foreground">{rentals.length}</p>
-                  </div>
-                  <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
-                    <Calendar className="h-6 w-6 text-primary-foreground" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="ios-card">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Faol arendalar</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {rentals.filter((r) => !r.is_returned && r.status === "delivered").length}
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
-                    <CheckCircle className="h-6 w-6 text-white" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="ios-card">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Kechikkanlar</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {rentals.filter((r) => r.is_overdue && !r.is_returned).length}
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 bg-red-500 rounded-xl flex items-center justify-center">
-                    <AlertTriangle className="h-6 w-6 text-white" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="ios-card">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Jami daromad</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {rentals
-                        .filter((r) => r.status !== "cancelled")
-                        .reduce((sum, rental) => sum + rental.total_amount, 0)
-                        .toLocaleString()}{" "}
-                      so'm
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
-                    <CreditCard className="h-6 w-6 text-white" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
       </Tabs>
+
+      {/* MD Password Dialog */}
+      <Dialog open={mdPasswordDialogOpen} onOpenChange={setMdPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>MD Parolni kiriting</DialogTitle>
+            <DialogDescription>Mahsulotni qaytarilgan deb belgilash uchun MD parolni kiriting</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="md-password">MD Parol</Label>
+              <Input
+                id="md-password"
+                type="password"
+                value={mdPassword}
+                onChange={(e) => setMdPassword(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && handleMdPasswordSubmit()}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setMdPasswordDialogOpen(false)} className="flex-1">
+                Bekor qilish
+              </Button>
+              <Button onClick={handleMdPasswordSubmit} className="flex-1">
+                Tasdiqlash
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

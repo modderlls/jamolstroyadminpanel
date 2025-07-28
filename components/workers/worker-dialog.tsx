@@ -1,9 +1,15 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,6 +19,7 @@ import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
 import { Plus, Edit, Save, Loader2 } from "lucide-react"
 import Image from "next/image"
+import { toast } from "sonner"
 
 interface Worker {
   id?: string
@@ -145,9 +152,11 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
         ...prev,
         portfolio_images: [...(prev.portfolio_images || []), ...uploadedUrls],
       }))
+
+      toast.success("Rasmlar muvaffaqiyatli yuklandi")
     } catch (error) {
       console.error("Error uploading images:", error)
-      alert("Rasmlarni yuklashda xatolik yuz berdi")
+      toast.error("Rasmlarni yuklashda xatolik yuz berdi")
     } finally {
       setUploading(false)
     }
@@ -162,7 +171,7 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
 
   const handleSave = async () => {
     if (!formData.first_name || !formData.last_name || !formData.profession_uz) {
-      alert("Ism, familiya va kasbni to'ldiring")
+      toast.error("Ism, familiya va kasbni to'ldiring")
       return
     }
 
@@ -179,16 +188,20 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
         if (error) throw error
       } else {
         // Create new worker
-        saveData.created_at = new Date().toISOString()
-        const { error } = await supabase.from("workers").insert([saveData])
+        const newWorkerData = {
+          ...saveData,
+          created_at: new Date().toISOString(),
+        }
+        const { error } = await supabase.from("workers").insert([newWorkerData])
         if (error) throw error
       }
 
+      toast.success(worker ? "Ishchi yangilandi" : "Ishchi qo'shildi")
       onSave()
       setOpen(false)
     } catch (error) {
       console.error("Error saving worker:", error)
-      alert("Ishchini saqlashda xatolik yuz berdi")
+      toast.error("Ishchini saqlashda xatolik yuz berdi")
     } finally {
       setLoading(false)
     }
@@ -210,6 +223,9 @@ export function WorkerDialog({ worker, onSave, trigger }: WorkerDialogProps) {
             {worker ? <Edit className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
             {worker ? "Ishchini tahrirlash" : "Yangi ishchi qo'shish"}
           </DialogTitle>
+          <DialogDescription>
+            {worker ? "Mavjud ishchi ma'lumotlarini tahrirlang" : "Yangi ishchi ma'lumotlarini kiriting"}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

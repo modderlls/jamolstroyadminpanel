@@ -14,8 +14,8 @@ export async function GET() {
     const totalSize = (response.Contents || []).reduce((sum, object) => sum + (object.Size || 0), 0)
     const totalSizeGB = (totalSize / (1024 * 1024 * 1024)).toFixed(2)
 
-    // 10GB limit for free tier
-    const maxStorage = 10 * 1024 * 1024 * 1024
+    // Assuming 10GB limit for R2
+    const maxStorage = 10 * 1024 * 1024 * 1024 // 10GB in bytes
     const maxStorageGB = "10"
     const usedPercentage = ((totalSize / maxStorage) * 100).toFixed(1)
 
