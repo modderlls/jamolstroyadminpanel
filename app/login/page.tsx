@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
+import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, MessageCircle, ExternalLink, CheckCircle, XCircle, Clock, Shield } from "lucide-react"
@@ -67,7 +68,22 @@ export default function AdminLoginPage() {
 
         if (data.status === "approved" && data.user) {
           setLoginStatus("approved")
-          localStorage.setItem("jamolstroy_admin", JSON.stringify(data.user))
+
+          // Supabase session yaratish
+          if (data.supabase_session) {
+            const { access_token, refresh_token } = data.supabase_session
+
+            if (access_token && refresh_token) {
+              const { error } = await supabase.auth.setSession({
+                access_token,
+                refresh_token,
+              })
+
+              if (error) {
+                console.error("Supabase session error:", error)
+              }
+            }
+          }
 
           // Clear interval
           if (intervalRef.current) {

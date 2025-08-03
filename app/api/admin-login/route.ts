@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { supabase, createServerClient } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
   try {
@@ -75,6 +75,72 @@ export async function GET(request: NextRequest) {
     if (session.status === "approved" && session.user) {
       if (session.user.role !== "admin") {
         return NextResponse.json({ status: "unauthorized", error: "Admin huquqi talab qilinadi" }, { status: 403 })
+      }
+
+      // Supabase sessiyasini yaratish
+      const serverClient = createServerClient()
+
+      // Foydalanuvchini Supabase auth ga qo'shish (agar mavjud bo'lmasa)
+      const { data: authUser, error: signUpError } = await serverClient.auth.admin.createUser({
+        email: `${session.user.telegram_id}@jamolstroy.local`,
+        password: Math.random().toString(36),
+        email_confirm: true,
+        user_metadata: {
+          telegram_id: session.user.telegram_id,
+          telegram_username: session.user.telegram_username,
+          full_name: session.user.full_name,
+          role: session.user.role,
+          user_id: session.user.id,
+        },
+      })
+
+      if (signUpError && !signUpError.message.includes("already registered")) {
+        console.error("Supabase user creation error:", signUpError)
+        return NextResponse.json({ error: "Supabase sessiya yaratishda xatolik" }, { status: 500 })
+      }
+
+      // Session token yaratish
+      let userId = authUser?.user?.id
+
+      if (!userId) {
+        // Agar user allaqachon mavjud bo'lsa, uni topish
+        const { data: existingUsers } = await serverClient.auth.admin.listUsers()
+        const existingUser = existingUsers.users.find((u) => u.user_metadata?.telegram_id === session.user.telegram_id)
+        userId = existingUser?.id
+      }
+
+      if (userId) {
+        // Access token yaratish
+        const { data: tokenData, error: tokenError } = await serverClient.auth.admin.generateLink({
+          type: "magiclink",
+          email: `${session.user.telegram_id}@jamolstroy.local`,
+        })
+
+        if (!tokenError && tokenData.properties?.action_link) {
+          const url = new URL(tokenData.properties.action_link)
+          const accessToken = url.searchParams.get("access_token")
+          const refreshToken = url.searchParams.get("refresh_token")
+
+          return NextResponse.json({
+            status: "approved",
+            user: session.user,
+            supabase_session: {
+              access_token: accessToken,
+              refresh_token: refreshToken,
+              user: {
+                id: userId,
+                email: `${session.user.telegram_id}@jamolstroy.local`,
+                user_metadata: {
+                  telegram_id: session.user.telegram_id,
+                  telegram_username: session.user.telegram_username,
+                  full_name: session.user.full_name,
+                  role: session.user.role,
+                  user_id: session.user.id,
+                },
+              },
+            },
+          })
+        }
       }
 
       return NextResponse.json({
