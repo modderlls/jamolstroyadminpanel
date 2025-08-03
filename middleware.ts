@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createServerClient } from "@supabase/ssr"
 
 export async function middleware(request: NextRequest) {
-  // Login page uchun exception
-  if (request.nextUrl.pathname === "/login") {
+  // Login page va auth callback uchun exception
+  if (request.nextUrl.pathname === "/login" || request.nextUrl.pathname.startsWith("/auth/")) {
     return NextResponse.next()
   }
 
@@ -22,45 +22,42 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
+
   try {
-    // Supabase client yaratish
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+            response = NextResponse.next({
+              request,
+            })
+            cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options))
+          },
+        },
       },
-    })
+    )
 
-    // Authorization header dan token olish
-    const authHeader = request.headers.get("authorization")
-    const token =
-      authHeader?.replace("Bearer ", "") ||
-      request.cookies.get("sb-access-token")?.value ||
-      request.cookies.get("supabase-auth-token")?.value
-
-    if (!token) {
-      return NextResponse.redirect(new URL("/login", request.url))
-    }
-
-    // Token ni tekshirish
+    // Session tekshirish
     const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser(token)
+      data: { session },
+    } = await supabase.auth.getSession()
 
-    if (error || !user) {
+    if (!session) {
       return NextResponse.redirect(new URL("/login", request.url))
     }
 
-    // Admin role tekshirish
-    if (user.user_metadata?.role !== "admin") {
-      return NextResponse.redirect(new URL("/login", request.url))
-    }
-
-    return NextResponse.next()
+    return response
   } catch (error) {
     console.error("Middleware error:", error)
     return NextResponse.redirect(new URL("/login", request.url))
@@ -75,7 +72,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - auth (auth callback)
      */
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|auth).*)",
   ],
 }

@@ -8,6 +8,7 @@ interface AuthContextType {
   user: User | null
   session: Session | null
   loading: boolean
+  signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -45,35 +46,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
 
       if (event === "SIGNED_IN" && session) {
-        // Store session info in localStorage for compatibility
-        localStorage.setItem(
-          "jamolstroy_admin",
-          JSON.stringify({
-            id: session.user.user_metadata?.user_id,
-            telegram_id: session.user.user_metadata?.telegram_id,
-            telegram_username: session.user.user_metadata?.telegram_username,
-            full_name: session.user.user_metadata?.full_name,
-            role: session.user.user_metadata?.role,
-          }),
-        )
+        console.log("User signed in:", session.user)
       } else if (event === "SIGNED_OUT") {
-        localStorage.removeItem("jamolstroy_admin")
+        console.log("User signed out")
       }
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  const signOut = async () => {
+  const signInWithGoogle = async () => {
     try {
-      await supabase.auth.signOut()
-      localStorage.removeItem("jamolstroy_admin")
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+      if (error) throw error
     } catch (error) {
-      console.error("Error signing out:", error)
+      console.error("Error signing in with Google:", error)
+      throw error
     }
   }
 
-  return <AuthContext.Provider value={{ user, session, loading, signOut }}>{children}</AuthContext.Provider>
+  const signOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+    } catch (error) {
+      console.error("Error signing out:", error)
+      throw error
+    }
+  }
+
+  return (
+    <AuthContext.Provider value={{ user, session, loading, signInWithGoogle, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {
