@@ -1,96 +1,69 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { supabase } from "@/lib/supabase"
-import type { User, Session } from "@supabase/supabase-js"
+import type React from "react"
+import { createContext, useContext, useEffect, useState } from "react"
+
+interface User {
+  id: string
+  telegram_id: number
+  first_name: string
+  last_name: string
+  username?: string
+  role: string
+  avatar_url?: string
+}
 
 interface AuthContextType {
   user: User | null
-  session: Session | null
   loading: boolean
-  signInWithGoogle: () => Promise<void>
-  signOut: () => Promise<void>
+  logout: () => void
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+  logout: () => {},
+})
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export const useAuth = () => useContext(AuthContext)
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Initial session check
-    const getInitialSession = async () => {
+    // Check localStorage for admin user
+    const adminUser = localStorage.getItem("jamolstroy_admin")
+    if (adminUser) {
       try {
-        const {
-          data: { session: initialSession },
-        } = await supabase.auth.getSession()
-        setSession(initialSession)
-        setUser(initialSession?.user ?? null)
+        const userData = JSON.parse(adminUser)
+        if (userData.role === "admin") {
+          setUser(userData)
+          // Set cookie for middleware
+          document.cookie = `jamolstroy_admin_token=${userData.id}; path=/; max-age=${7 * 24 * 60 * 60}`
+        } else {
+          // Not admin, redirect to login
+          localStorage.removeItem("jamolstroy_admin")
+          window.location.href = "/login"
+        }
       } catch (error) {
-        console.error("Error getting initial session:", error)
-      } finally {
-        setLoading(false)
+        console.error("Error parsing admin user:", error)
+        localStorage.removeItem("jamolstroy_admin")
+        window.location.href = "/login"
       }
+    } else {
+      // No admin user, redirect to login
+      window.location.href = "/login"
     }
-
-    getInitialSession()
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-
-      if (event === "SIGNED_IN" && session) {
-        console.log("User signed in:", session.user)
-      } else if (event === "SIGNED_OUT") {
-        console.log("User signed out")
-      }
-    })
-
-    return () => subscription.unsubscribe()
+    setLoading(false)
   }, [])
 
-  const signInWithGoogle = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
-      if (error) throw error
-    } catch (error) {
-      console.error("Error signing in with Google:", error)
-      throw error
-    }
+  const logout = () => {
+    localStorage.removeItem("jamolstroy_admin")
+    document.cookie = "jamolstroy_admin_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
+    setUser(null)
+    window.location.href = "/login"
   }
 
-  const signOut = async () => {
-    try {
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-    } catch (error) {
-      console.error("Error signing out:", error)
-      throw error
-    }
-  }
-
-  return (
-    <AuthContext.Provider value={{ user, session, loading, signInWithGoogle, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  )
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
+  return <AuthContext.Provider value={{ user, loading, logout }}>{children}</AuthContext.Provider>
 }
