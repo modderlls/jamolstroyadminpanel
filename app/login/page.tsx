@@ -1,207 +1,65 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
-import { supabase } from "@/lib/supabase"
+import { useTelegram } from "@/contexts/TelegramContext"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, MessageCircle, ExternalLink, CheckCircle, XCircle, Clock, Shield, Mail } from "lucide-react"
+import { Loader2, MessageCircle, ExternalLink, CheckCircle, XCircle, Clock } from "lucide-react"
 
-export default function AdminLoginPage() {
+export default function LoginPage() {
   const router = useRouter()
-  const { user, loading, setUserData } = useAuth()
+  const { user, loading } = useAuth()
+  const { isTelegramWebApp } = useTelegram()
 
-  // Email/Password login state
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [emailLoginLoading, setEmailLoginLoading] = useState(false)
-  const [emailLoginError, setEmailLoginError] = useState("")
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [authenticatedUser, setAuthenticatedUser] = useState<any>(null)
-
-  // Telegram login state
   const [isLoading, setIsLoading] = useState(false)
   const [telegramUrl, setTelegramUrl] = useState("")
   const [tempToken, setTempToken] = useState("")
   const [loginStatus, setLoginStatus] = useState<"pending" | "approved" | "rejected" | null>(null)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const isCheckingRef = useRef(false)
-  const hasRedirectedRef = useRef(false)
-  const mountedRef = useRef(true)
 
-  // Cleanup on unmount
   useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-      isCheckingRef.current = false
+    if (user) {
+      router.push("/")
     }
-  }, [])
+  }, [user, router])
 
-  // Handle user redirect only once
   useEffect(() => {
-    if (!loading && user && !hasRedirectedRef.current && mountedRef.current) {
-      hasRedirectedRef.current = true
-      // Clear any intervals before redirect
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-      router.replace("/")
-    }
-  }, [user, loading, router])
+    let interval: NodeJS.Timeout
 
-  // Handle login status checking
-  useEffect(() => {
-    if (!tempToken || loginStatus !== "pending" || isCheckingRef.current || !mountedRef.current) {
-      return
-    }
+    if (tempToken && loginStatus === "pending") {
+      // Poll for login status
+      interval = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/website-login?token=${tempToken}`)
+          const data = await response.json()
 
-    isCheckingRef.current = true
-
-    const checkLoginStatus = async () => {
-      if (!mountedRef.current) return
-
-      try {
-        const response = await fetch(`/api/admin-login?token=${tempToken}`)
-        if (!response.ok) throw new Error("Network response was not ok")
-
-        const data = await response.json()
-
-        if (!mountedRef.current) return
-
-        if (data.status === "approved" && data.user) {
-          setLoginStatus("approved")
-
-          // Set user data in context (this will trigger redirect)
-          if (authenticatedUser?.session) {
-            setUserData(data.user, authenticatedUser.session)
+          if (data.status === "approved" && data.user) {
+            setLoginStatus("approved")
+            localStorage.setItem("jamolstroy_user", JSON.stringify(data.user))
+            setTimeout(() => {
+              window.location.href = "/"
+            }, 1000)
+          } else if (data.status === "rejected") {
+            setLoginStatus("rejected")
           }
-
-          // Clear interval
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current)
-            intervalRef.current = null
-          }
-          isCheckingRef.current = false
-
-          // Delay redirect to show success message
-          setTimeout(() => {
-            if (mountedRef.current && !hasRedirectedRef.current) {
-              hasRedirectedRef.current = true
-              router.replace("/")
-            }
-          }, 1500)
-        } else if (data.status === "rejected" || data.status === "unauthorized") {
-          setLoginStatus("rejected")
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current)
-            intervalRef.current = null
-          }
-          isCheckingRef.current = false
-
-          if (data.status === "unauthorized") {
-            alert("Admin huquqi talab qilinadi!")
-          }
+        } catch (error) {
+          console.error("Login status check error:", error)
         }
-      } catch (error) {
-        console.error("Admin login status check error:", error)
-        // Don't stop checking on network errors, just log them
-      }
+      }, 2000)
     }
 
-    // Initial check
-    checkLoginStatus()
-
-    // Set up interval for subsequent checks
-    intervalRef.current = setInterval(checkLoginStatus, 3000)
-
-    // Cleanup function
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-      isCheckingRef.current = false
+      if (interval) clearInterval(interval)
     }
-  }, [tempToken, loginStatus, authenticatedUser, setUserData, router])
-
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!mountedRef.current) return
-
-    setEmailLoginLoading(true)
-    setEmailLoginError("")
-
-    try {
-      // Use Supabase client directly for authentication
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) {
-        console.error("Supabase auth error:", error)
-        setEmailLoginError("Noto'g'ri email yoki parol")
-        return
-      }
-
-      if (!data.user) {
-        setEmailLoginError("Foydalanuvchi topilmadi")
-        return
-      }
-
-      // Check if user is admin
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", data.user.id)
-        .single()
-
-      if (userError || !userData || userData.role !== "admin") {
-        setEmailLoginError("Admin huquqi talab qilinadi")
-        await supabase.auth.signOut()
-        return
-      }
-
-      // Success - set authenticated state
-      setIsAuthenticated(true)
-      setAuthenticatedUser({
-        user: userData,
-        session: data.session,
-      })
-      setEmailLoginError("")
-
-      // Set user data in context immediately
-      if (data.session) {
-        setUserData(userData, data.session)
-      }
-    } catch (error) {
-      console.error("Email login error:", error)
-      setEmailLoginError("Login xatoligi")
-    } finally {
-      if (mountedRef.current) {
-        setEmailLoginLoading(false)
-      }
-    }
-  }
+  }, [tempToken, loginStatus])
 
   const handleTelegramLogin = async () => {
-    if (!mountedRef.current || !isAuthenticated) return
-
     try {
       setIsLoading(true)
-      const clientId = "jamolstroy_admin_" + Date.now()
+      const clientId = "jamolstroy_web_" + Date.now()
 
-      const response = await fetch("/api/admin-login", {
+      const response = await fetch("/api/website-login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -209,212 +67,112 @@ export default function AdminLoginPage() {
         body: JSON.stringify({ client_id: clientId }),
       })
 
-      if (!response.ok) throw new Error("Network response was not ok")
       const data = await response.json()
 
-      if (mountedRef.current) {
+      if (response.ok) {
         setTempToken(data.temp_token)
         setTelegramUrl(data.telegram_url)
         setLoginStatus("pending")
+
+        // Open Telegram
         window.open(data.telegram_url, "_blank")
+      } else {
+        throw new Error(data.error)
       }
     } catch (error) {
-      console.error("Admin Telegram login error:", error)
-      if (mountedRef.current) {
-        alert("Telegram login xatoligi")
-      }
+      console.error("Telegram login error:", error)
+      alert("Telegram login xatoligi")
     } finally {
-      if (mountedRef.current) {
-        setIsLoading(false)
-      }
+      setIsLoading(false)
     }
   }
 
   const resetLogin = () => {
-    if (!mountedRef.current) return
-
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-    isCheckingRef.current = false
     setLoginStatus(null)
     setTempToken("")
     setTelegramUrl("")
   }
 
-  const resetToEmailLogin = async () => {
-    // Sign out from Supabase
-    await supabase.auth.signOut()
-
-    setIsAuthenticated(false)
-    setAuthenticatedUser(null)
-    setEmail("")
-    setPassword("")
-    setEmailLoginError("")
-    resetLogin()
-  }
-
-  // Show loading while checking auth
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-foreground" />
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
           <p className="text-muted-foreground">Yuklanmoqda...</p>
         </div>
       </div>
     )
   }
 
-  // Don't render login form if user is already logged in
-  if (user) {
+  if (isTelegramWebApp) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-foreground" />
-          <p className="text-muted-foreground">Yo'naltirilmoqda...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+            <CardTitle>Telegram Web App</CardTitle>
+            <CardDescription>Siz allaqachon Telegram orqali kirgansiz</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => router.push("/")} className="w-full">
+              Bosh sahifaga o'tish
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md ios-card">
+      <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-2xl flex items-center justify-center">
-            <Shield className="h-8 w-8 text-primary-foreground" />
-          </div>
-          <CardTitle className="text-2xl text-foreground">JamolStroy Admin</CardTitle>
-          <CardDescription>
-            {!isAuthenticated ? "Admin panel uchun email va parol bilan kiring" : "Telegram orqali tasdiqlang"}
-          </CardDescription>
+          <CardTitle className="text-2xl">JamolStroy</CardTitle>
+          <CardDescription>Telegram orqali hisobingizga kiring</CardDescription>
         </CardHeader>
         <CardContent>
-          {!isAuthenticated ? (
-            // Email/Password Login Form
-            <form onSubmit={handleEmailLogin} className="space-y-4">
-              {emailLoginError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-200 text-sm">
-                  {emailLoginError}
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@example.com"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Parol</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Parolni kiriting"
-                  required
-                />
-              </div>
-
-              <Button type="submit" disabled={emailLoginLoading || !email || !password} className="w-full ios-button">
-                {emailLoginLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Tekshirilmoqda...
-                  </>
-                ) : (
-                  <>
-                    <Mail className="h-4 w-4 mr-2" />
-                    Kirish
-                  </>
-                )}
-              </Button>
-
-              <div className="bg-muted border border-border rounded-xl p-3">
-                <p className="text-sm text-foreground">
-                  🔒 Bu admin panel. Faqat admin huquqiga ega foydalanuvchilar kirishi mumkin.
-                </p>
-              </div>
-            </form>
-          ) : loginStatus === "pending" ? (
-            // Telegram Confirmation
+          {loginStatus === "pending" ? (
             <div className="text-center space-y-4">
               <div className="animate-pulse">
-                <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <Clock className="h-12 w-12 mx-auto mb-4 text-blue-500" />
               </div>
               <h3 className="text-lg font-semibold">Telegram orqali tasdiqlang</h3>
-              <p className="text-muted-foreground text-sm">Telegram botga o'ting va admin login so'rovini tasdiqlang</p>
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-3">
-                <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  ⚠️ Faqat admin huquqiga ega foydalanuvchilar kirishi mumkin
-                </p>
-              </div>
+              <p className="text-muted-foreground text-sm">Telegram botga o'ting va login so'rovini tasdiqlang</p>
               {telegramUrl && (
-                <Button
-                  variant="outline"
-                  onClick={() => window.open(telegramUrl, "_blank")}
-                  className="w-full ios-button"
-                >
+                <Button variant="outline" onClick={() => window.open(telegramUrl, "_blank")} className="w-full">
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Telegram botni ochish
                 </Button>
               )}
-              <div className="flex gap-2">
-                <Button variant="ghost" onClick={resetLogin} className="flex-1 ios-button">
-                  Bekor qilish
-                </Button>
-                <Button variant="outline" onClick={resetToEmailLogin} className="flex-1 ios-button bg-transparent">
-                  Orqaga
-                </Button>
-              </div>
+              <Button variant="ghost" onClick={resetLogin} className="w-full">
+                Bekor qilish
+              </Button>
             </div>
           ) : loginStatus === "approved" ? (
-            // Success
             <div className="text-center space-y-4">
               <CheckCircle className="h-12 w-12 mx-auto text-green-500" />
-              <h3 className="text-lg font-semibold text-green-600">Admin login muvaffaqiyatli!</h3>
-              <p className="text-muted-foreground text-sm">Admin panelga yo'naltirilmoqda...</p>
+              <h3 className="text-lg font-semibold text-green-600">Login muvaffaqiyatli!</h3>
+              <p className="text-muted-foreground text-sm">Bosh sahifaga yo'naltirilmoqda...</p>
             </div>
           ) : loginStatus === "rejected" ? (
-            // Rejected
             <div className="text-center space-y-4">
               <XCircle className="h-12 w-12 mx-auto text-red-500" />
               <h3 className="text-lg font-semibold text-red-600">Login rad etildi</h3>
-              <p className="text-muted-foreground text-sm">Admin huquqi yo'q yoki login rad etildi</p>
-              <div className="flex gap-2">
-                <Button onClick={resetLogin} className="flex-1 ios-button">
-                  Qayta urinish
-                </Button>
-                <Button variant="outline" onClick={resetToEmailLogin} className="flex-1 ios-button bg-transparent">
-                  Orqaga
-                </Button>
-              </div>
+              <p className="text-muted-foreground text-sm">Telegram orqali login rad etildi</p>
+              <Button onClick={resetLogin} className="w-full">
+                Qayta urinish
+              </Button>
             </div>
           ) : (
-            // Authenticated, ready for Telegram
             <div className="text-center space-y-4">
-              <div className="w-12 h-12 mx-auto bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center">
-                <CheckCircle className="h-6 w-6 text-green-600" />
-              </div>
+              <MessageCircle className="h-12 w-12 mx-auto text-primary" />
               <div>
-                <h3 className="text-lg font-semibold text-green-600">Email/parol tasdiqlandi!</h3>
-                <p className="text-muted-foreground text-sm">Endi Telegram orqali yakuniy tasdiqlashni o'ting</p>
-              </div>
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3">
-                <p className="text-sm text-blue-800 dark:text-blue-200">
-                  📱 Telegram orqali yakuniy tasdiqlash uchun tugmani bosing
+                <h3 className="text-lg font-semibold">Telegram orqali kirish</h3>
+                <p className="text-muted-foreground text-sm">
+                  Xavfsiz va tez kirish uchun Telegram akkauntingizdan foydalaning
                 </p>
               </div>
-              <Button onClick={handleTelegramLogin} disabled={isLoading} className="w-full ios-button">
+              <Button onClick={handleTelegramLogin} disabled={isLoading} className="w-full">
                 {isLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -423,12 +181,9 @@ export default function AdminLoginPage() {
                 ) : (
                   <>
                     <MessageCircle className="h-4 w-4 mr-2" />
-                    Telegram orqali tasdiqlash
+                    Telegram orqali kirish
                   </>
                 )}
-              </Button>
-              <Button variant="outline" onClick={resetToEmailLogin} className="w-full ios-button bg-transparent">
-                Orqaga
               </Button>
             </div>
           )}

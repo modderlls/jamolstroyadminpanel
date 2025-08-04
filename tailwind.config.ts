@@ -26,18 +26,8 @@ const config: Config = {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "#8B5CF6", // Purple-500
-          foreground: "#FFFFFF",
-          50: "#F3F0FF",
-          100: "#E9E2FF",
-          200: "#D4C9FF",
-          300: "#B8A5FF",
-          400: "#9B7AFF",
-          500: "#8B5CF6",
-          600: "#7C3AED",
-          700: "#6D28D9",
-          800: "#5B21B6",
-          900: "#4C1D95",
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
