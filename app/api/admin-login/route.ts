@@ -1,28 +1,53 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase"
 
 // Email/Password login endpoint
 export async function POST(request: NextRequest) {
   try {
     const { email, password, client_id } = await request.json()
 
-    // If email and password provided, authenticate first
+    // If email and password provided, authenticate with Supabase
     if (email && password) {
-      // Simple hardcoded admin credentials check
-      if (email !== "admin@jamolstroy.uz" || password !== "jamolstroy2024") {
+      const supabase = createServerClient()
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) {
+        console.error("Supabase auth error:", error)
         return NextResponse.json({ error: "Noto'g'ri email yoki parol" }, { status: 401 })
       }
 
-      // Return success for email/password authentication
+      if (!data.user) {
+        return NextResponse.json({ error: "Foydalanuvchi topilmadi" }, { status: 401 })
+      }
+
+      // Check if user is admin
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", data.user.id)
+        .single()
+
+      if (userError || !userData || userData.role !== "admin") {
+        return NextResponse.json({ error: "Admin huquqi talab qilinadi" }, { status: 403 })
+      }
+
+      // Return success with user data
       return NextResponse.json({
         success: true,
         message: "Email/parol orqali muvaffaqiyatli kirildi",
         authenticated: true,
+        user: userData,
+        session: data.session,
       })
     }
 
     // If client_id provided, create Telegram session (only after email/password auth)
     if (client_id) {
+      const supabase = createServerClient()
       const tempToken = Math.random().toString(36).substring(2) + Date.now().toString(36)
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
 
@@ -72,6 +97,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Token talab qilinadi" }, { status: 400 })
     }
 
+    const supabase = createServerClient()
     const { data: session, error } = await supabase
       .from("website_login_sessions")
       .select(`

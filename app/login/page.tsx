@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
@@ -13,7 +12,7 @@ import { Loader2, MessageCircle, ExternalLink, CheckCircle, XCircle, Clock, Shie
 
 export default function AdminLoginPage() {
   const router = useRouter()
-  const { user, loading } = useAuth()
+  const { user, loading, setUserData } = useAuth()
 
   // Email/Password login state
   const [email, setEmail] = useState("")
@@ -21,6 +20,7 @@ export default function AdminLoginPage() {
   const [emailLoginLoading, setEmailLoginLoading] = useState(false)
   const [emailLoginError, setEmailLoginError] = useState("")
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authenticatedUser, setAuthenticatedUser] = useState<any>(null)
 
   // Telegram login state
   const [isLoading, setIsLoading] = useState(false)
@@ -79,7 +79,11 @@ export default function AdminLoginPage() {
 
         if (data.status === "approved" && data.user) {
           setLoginStatus("approved")
-          localStorage.setItem("jamolstroy_admin", JSON.stringify(data.user))
+
+          // Set user data in context (this will trigger redirect)
+          if (authenticatedUser?.session) {
+            setUserData(data.user, authenticatedUser.session)
+          }
 
           // Clear interval
           if (intervalRef.current) {
@@ -127,7 +131,7 @@ export default function AdminLoginPage() {
       }
       isCheckingRef.current = false
     }
-  }, [tempToken, loginStatus])
+  }, [tempToken, loginStatus, authenticatedUser, setUserData, router])
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -150,6 +154,7 @@ export default function AdminLoginPage() {
       if (mountedRef.current) {
         if (response.ok && data.authenticated) {
           setIsAuthenticated(true)
+          setAuthenticatedUser(data)
           setEmailLoginError("")
         } else {
           setEmailLoginError(data.error || "Login xatoligi")
@@ -218,6 +223,7 @@ export default function AdminLoginPage() {
 
   const resetToEmailLogin = () => {
     setIsAuthenticated(false)
+    setAuthenticatedUser(null)
     setEmail("")
     setPassword("")
     setEmailLoginError("")
@@ -277,7 +283,7 @@ export default function AdminLoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@jamolstroy.uz"
+                  placeholder="admin@example.com"
                   required
                 />
               </div>

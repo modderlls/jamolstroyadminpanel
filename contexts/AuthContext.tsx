@@ -2,68 +2,113 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
+import { supabase } from "@/lib/supabase"
+import type { Session } from "@supabase/supabase-js"
 
 interface User {
   id: string
-  telegram_id: number
-  first_name: string
-  last_name: string
+  telegram_id?: number
+  first_name?: string
+  last_name?: string
   username?: string
   role: string
   avatar_url?: string
+  email?: string
 }
 
 interface AuthContextType {
   user: User | null
   loading: boolean
+  session: Session | null
   logout: () => void
+  setUserData: (userData: User, sessionData: Session) => void
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  session: null,
   logout: () => {},
+  setUserData: () => {},
 })
 
 export const useAuth = () => useContext(AuthContext)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check localStorage for admin user
-    const adminUser = localStorage.getItem("jamolstroy_admin")
-    if (adminUser) {
-      try {
-        const userData = JSON.parse(adminUser)
-        if (userData.role === "admin") {
+    // Get initial session
+    const getInitialSession = async () => {
+      const {
+        data: { session: initialSession },
+      } = await supabase.auth.getSession()
+
+      if (initialSession?.user) {
+        // Get user data from database
+        const { data: userData, error } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", initialSession.user.id)
+          .single()
+
+        if (!error && userData && userData.role === "admin") {
           setUser(userData)
+          setSession(initialSession)
           // Set cookie for middleware
           document.cookie = `jamolstroy_admin_token=${userData.id}; path=/; max-age=${7 * 24 * 60 * 60}`
         } else {
-          // Not admin, redirect to login
-          localStorage.removeItem("jamolstroy_admin")
-          window.location.href = "/login"
+          // Not admin or error, clear session
+          await supabase.auth.signOut()
         }
-      } catch (error) {
-        console.error("Error parsing admin user:", error)
-        localStorage.removeItem("jamolstroy_admin")
-        window.location.href = "/login"
       }
-    } else {
-      // No admin user, redirect to login
-      window.location.href = "/login"
+      setLoading(false)
     }
-    setLoading(false)
+
+    getInitialSession()
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        // Get user data from database
+        const { data: userData, error } = await supabase.from("users").select("*").eq("id", session.user.id).single()
+
+        if (!error && userData && userData.role === "admin") {
+          setUser(userData)
+          setSession(session)
+          // Set cookie for middleware
+          document.cookie = `jamolstroy_admin_token=${userData.id}; path=/; max-age=${7 * 24 * 60 * 60}`
+        } else {
+          // Not admin, sign out
+          await supabase.auth.signOut()
+        }
+      } else if (event === "SIGNED_OUT") {
+        setUser(null)
+        setSession(null)
+        document.cookie = "jamolstroy_admin_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
+      }
+      setLoading(false)
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
-  const logout = () => {
-    localStorage.removeItem("jamolstroy_admin")
-    document.cookie = "jamolstroy_admin_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
-    setUser(null)
-    window.location.href = "/login"
+  const setUserData = (userData: User, sessionData: Session) => {
+    setUser(userData)
+    setSession(sessionData)
+    document.cookie = `jamolstroy_admin_token=${userData.id}; path=/; max-age=${7 * 24 * 60 * 60}`
   }
 
-  return <AuthContext.Provider value={{ user, loading, logout }}>{children}</AuthContext.Provider>
+  const logout = async () => {
+    await supabase.auth.signOut()
+    setUser(null)
+    setSession(null)
+    document.cookie = "jamolstroy_admin_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
+  }
+
+  return <AuthContext.Provider value={{ user, loading, session, logout, setUserData }}>{children}</AuthContext.Provider>
 }
