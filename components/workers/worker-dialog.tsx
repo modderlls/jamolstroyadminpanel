@@ -381,26 +381,7 @@ export function WorkerDialog({ worker, onSaved, onClose, open }: WorkerDialogPro
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="profession_ru">Kasb (Rus)</Label>
-                <Input
-                  id="profession_ru"
-                  value={formData.profession_ru || ""}
-                  onChange={(e) => handleInputChange("profession_ru", e.target.value)}
-                  placeholder="Например: Строитель"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="profession_en">Kasb (Ingliz)</Label>
-                <Input
-                  id="profession_en"
-                  value={formData.profession_en || ""}
-                  onChange={(e) => handleInputChange("profession_en", e.target.value)}
-                  placeholder="Example: Builder"
-                />
-              </div>
-            </div>
+            
 
             <div className="space-y-2">
               <Label htmlFor="phone_number">Telefon raqami</Label>
@@ -432,77 +413,34 @@ export function WorkerDialog({ worker, onSaved, onClose, open }: WorkerDialogPro
             </div>
           </div>
 
-          {/* Professional Information */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Professional ma'lumotlar</h3>
+          
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="experience_years">Tajriba (yil)</Label>
-                <Input
-                  id="experience_years"
-                  type="number"
-                  min="0"
-                  value={formData.experience_years}
-                  onChange={(e) => handleInputChange("experience_years", Number.parseInt(e.target.value) || 0)}
-                />
+          <div className="space-y-2">
+            <Label htmlFor="skills">Konikmalar</Label>
+            <Textarea
+            id="skills"
+            value={formData.skills.join("\n")}
+            onChange={(e) => {
+              const skillsArray = e.target.value
+                .split("\n")
+                .map((s) => s.trim())
+                .filter((s) => s !== "")
+              setFormData({ ...formData, skills: skillsArray })
+            }}
+             placeholder={`Qurilish\nTa'mirlash\nElektr ishlari`}
+             rows={4}
+           />
+           {formData.skills.length > 0 && (
+             <div className="flex flex-wrap gap-1 mt-2">
+               {formData.skills.map((skill, index) => (
+                 <Badge key={index} variant="secondary" className="text-xs">
+                   {skill}
+                 </Badge>
+               ))}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="rating">Reyting (0-5)</Label>
-                <Input
-                  id="rating"
-                  type="number"
-                  min="0"
-                  max="5"
-                  step="0.1"
-                  value={formData.rating}
-                  onChange={(e) => handleInputChange("rating", Number.parseFloat(e.target.value) || 0)}
-                />
-              </div>
-            </div>
+            )}
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="hourly_rate">Soatlik narx (so'm)</Label>
-                <Input
-                  id="hourly_rate"
-                  type="number"
-                  min="0"
-                  value={formData.hourly_rate}
-                  onChange={(e) => handleInputChange("hourly_rate", Number.parseInt(e.target.value) || 0)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="daily_rate">Kunlik narx (so'm)</Label>
-                <Input
-                  id="daily_rate"
-                  type="number"
-                  min="0"
-                  value={formData.daily_rate}
-                  onChange={(e) => handleInputChange("daily_rate", Number.parseInt(e.target.value) || 0)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="skills">Ko'nikmalar (har birini yangi qatordan kiriting)</Label>
-              <Textarea
-                id="skills"
-                value={formData.skills?.join("\n") || ""}
-                onChange={(e) => handleSkillsChange(e.target.value)}
-                placeholder="Qurilish&#10;Ta'mirlash&#10;Elektr ishlari"
-                rows={4}
-              />
-              {formData.skills && formData.skills.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {formData.skills.map((skill, index) => (
-                    <Badge key={index} variant="secondary" className="text-xs">
-                      {skill}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
 
             {/* Descriptions */}
             <div className="space-y-4">
@@ -517,16 +455,7 @@ export function WorkerDialog({ worker, onSaved, onClose, open }: WorkerDialogPro
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="description_ru">Tavsif (Rus)</Label>
-                <Textarea
-                  id="description_ru"
-                  value={formData.description_ru || ""}
-                  onChange={(e) => handleInputChange("description_ru", e.target.value)}
-                  placeholder="Краткая информация о работнике..."
-                  rows={3}
-                />
-              </div>
+              
             </div>
           </div>
 

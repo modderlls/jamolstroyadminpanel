@@ -771,22 +771,7 @@ export function ProductDialog({
                             onChange={(e) => updateSpecificationItem(specType, index, "value", e.target.value)}
                           />
                         </div>
-                        <div className="flex-1">
-                          <Label className="text-xs">Qo'shimcha narx (ixtiyoriy)</Label>
-                          <Input
-                            type="number"
-                            placeholder="0"
-                            value={item.price || ""}
-                            onChange={(e) =>
-                              updateSpecificationItem(
-                                specType,
-                                index,
-                                "price",
-                                e.target.value ? Number(e.target.value) : undefined,
-                              )
-                            }
-                          />
-                        </div>
+                        
                         <Button
                           type="button"
                           variant="outline"

@@ -344,8 +344,8 @@ export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
               <Card>
                 <CardContent className="p-12 text-center">
                   <IdCard className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <h3 className="text-lg font-semibold mb-2">Hujjatlar topilmadi</h3>
-                  <p className="text-muted-foreground">Bu ishchi uchun hujjat ma'lumotlari kiritilmagan</p>
+                  <h3 className="text-lg font-semibold mb-2">Hujjatlar topilmadi yoki himoyalanagn</h3>
+                  <p className="text-muted-foreground">Bu ishchi uchun hujjat ma'lumotlari kiritilmagan yoki ishchining hujjatlari bazada xavfsiz himoyalangan</p>
                 </CardContent>
               </Card>
             )}
