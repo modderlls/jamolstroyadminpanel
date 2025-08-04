@@ -1,530 +1,432 @@
 "use client"
 
-import type React from "react"
-import { useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { WorkerDialog } from "@/components/workers/worker-dialog"
+import { WorkerViewDialog } from "@/components/workers/worker-view-dialog"
 import { supabase } from "@/lib/supabase"
-import { BottomNavigation } from "@/components/layout/bottom-navigation"
-import { TopBar } from "@/components/layout/top-bar"
-import { BottomSheet } from "@/components/ui/bottom-sheet"
-import { Star, MapPin, Phone, Filter, Search } from "lucide-react"
-import Image from "next/image"
+import { Users, Plus, Search, Star, MapPin, Phone, Briefcase, Clock, Eye, Edit, Trash2, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 
 interface Worker {
   id: string
   first_name: string
   last_name: string
   profession_uz: string
+  phone_number: string
   experience_years: number
   hourly_rate: number
   daily_rate: number
   rating: number
-  review_count: number
-  location: string
   is_available: boolean
-  skills: string[]
-  avatar_url?: string
-  phone_number: string
+  location: string
+  description_uz?: string
+  skills?: string[]
+  portfolio_images?: string[]
+  created_at: string
+  updated_at: string
 }
 
 export default function WorkersPage() {
-  const searchParams = useSearchParams()
-  const initialSearch = searchParams.get("search") || ""
-
   const [workers, setWorkers] = useState<Worker[]>([])
-  const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null)
-  const [showWorkerSheet, setShowWorkerSheet] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState(initialSearch)
-  const [showFilters, setShowFilters] = useState(false)
-  const [filters, setFilters] = useState({
-    profession: "",
-    location: "",
-    minRating: 0,
-    maxRate: 999999,
-  })
-  const [professions, setProfessions] = useState<string[]>([])
-  const [locations, setLocations] = useState<string[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null)
+  const [showWorkerDialog, setShowWorkerDialog] = useState(false)
+  const [editingWorker, setEditingWorker] = useState<Worker | null>(null)
+  const [showViewDialog, setShowViewDialog] = useState(false)
+  const [selectedRows, setSelectedRows] = useState<string[]>([])
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deletePassword, setDeletePassword] = useState("")
+  const [deleteError, setDeleteError] = useState("")
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   useEffect(() => {
     fetchWorkers()
-    fetchFilterOptions()
-  }, [searchQuery, filters])
-
-  const fetchFilterOptions = async () => {
-    try {
-      const { data, error } = await supabase.from("workers").select("profession_uz, location").eq("is_available", true)
-
-      if (error) throw error
-
-      const uniqueProfessions = [...new Set(data?.map((w) => w.profession_uz).filter(Boolean))]
-      const uniqueLocations = [...new Set(data?.map((w) => w.location).filter(Boolean))]
-
-      setProfessions(uniqueProfessions)
-      setLocations(uniqueLocations)
-    } catch (error) {
-      console.error("Filter options error:", error)
-    }
-  }
+  }, [])
 
   const fetchWorkers = async () => {
-    setLoading(true)
     try {
-      const { data, error } = await supabase.rpc("search_workers", {
-        search_term: searchQuery,
-        profession_filter: filters.profession,
-        location_filter: filters.location,
-        min_rating: filters.minRating,
-        max_hourly_rate: filters.maxRate,
-        limit_count: 50,
-      })
+      setLoading(true)
+      const { data, error } = await supabase.from("workers").select("*").order("created_at", { ascending: false })
 
       if (error) throw error
       setWorkers(data || [])
     } catch (error) {
-      console.error("Ishchilarni yuklashda xatolik:", error)
-      // Fallback to direct query if RPC fails
-      try {
-        let query = supabase.from("workers").select("*").eq("is_available", true)
-
-        if (searchQuery) {
-          query = query.or(
-            `first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,profession_uz.ilike.%${searchQuery}%`,
-          )
-        }
-
-        if (filters.profession) {
-          query = query.eq("profession_uz", filters.profession)
-        }
-
-        if (filters.location) {
-          query = query.ilike("location", `%${filters.location}%`)
-        }
-
-        query = query
-          .gte("rating", filters.minRating)
-          .lte("hourly_rate", filters.maxRate)
-          .order("rating", { ascending: false })
-          .limit(50)
-
-        const { data: fallbackData, error: fallbackError } = await query
-
-        if (fallbackError) throw fallbackError
-        setWorkers(fallbackData || [])
-      } catch (fallbackError) {
-        console.error("Fallback query error:", fallbackError)
-        setWorkers([])
-      }
+      console.error("Error fetching workers:", error)
+      toast.error("Ustalarni yuklashda xatolik")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleWorkerSaved = () => {
     fetchWorkers()
+    setShowWorkerDialog(false)
+    setEditingWorker(null)
   }
 
-  const handleWorkerSelect = (worker: Worker) => {
-    setSelectedWorker(worker)
-    setShowWorkerSheet(true)
+  const handleDeleteSelected = async () => {
+    if (selectedRows.length === 0) return
+
+    if (!deletePassword) {
+      setDeleteError("MD parolni kiriting")
+      return
+    }
+
+    setDeleteLoading(true)
+    setDeleteError("")
+
+    try {
+      // Verify MD password
+      const response = await fetch("/api/md-password/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePassword }),
+      })
+
+      const data = await response.json()
+
+      if (!data.valid) {
+        setDeleteError(data.error || "Noto'g'ri parol")
+        return
+      }
+
+      // Delete selected workers
+      const { error } = await supabase.from("workers").delete().in("id", selectedRows)
+
+      if (error) throw error
+
+      toast.success(`${selectedRows.length} ta usta o'chirildi`)
+      await fetchWorkers()
+      setSelectedRows([])
+      setShowDeleteConfirm(false)
+      setDeletePassword("")
+    } catch (error) {
+      console.error("Error deleting workers:", error)
+      setDeleteError("Ustalarni o'chirishda xatolik yuz berdi")
+    } finally {
+      setDeleteLoading(false)
+    }
   }
 
-  const handleContactWorker = (phoneNumber: string) => {
-    window.open(`tel:${phoneNumber}`)
+  const handleEditWorker = (worker: Worker) => {
+    setEditingWorker(worker)
+    setShowWorkerDialog(true)
   }
 
-  const clearFilters = () => {
-    setFilters({
-      profession: "",
-      location: "",
-      minRating: 0,
-      maxRate: 999999,
-    })
-    setShowFilters(false)
-  }
+  const filteredWorkers = workers.filter((worker) =>
+    `${worker.first_name} ${worker.last_name} ${worker.profession_uz} ${worker.location}`
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase()),
+  )
 
-  const applyFilters = () => {
-    setShowFilters(false)
-    fetchWorkers()
+  const availableWorkers = workers.filter((w) => w.is_available).length
+  const totalWorkers = workers.length
+  const averageRating = workers.length > 0 ? workers.reduce((sum, w) => sum + w.rating, 0) / workers.length : 0
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6 bg-background min-h-screen">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-foreground" />
+            <p className="text-muted-foreground">Ustalar yuklanmoqda...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-4">
-      <TopBar />
+    <div className="p-6 space-y-6 bg-background min-h-screen">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Ustalar</h1>
+          <p className="text-muted-foreground">Qurilish ustalarini boshqarish</p>
+        </div>
+        <Button onClick={() => setShowWorkerDialog(true)} className="ios-button">
+          <Plus className="h-4 w-4 mr-2" />
+          Yangi ustakor
+        </Button>
+      </div>
 
-      {/* Header with Search */}
-      <div className="container mx-auto px-4 py-4 border-b border-border">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex-1">
-            <h1 className="text-xl font-bold">Ishchilar</h1>
-            <p className="text-sm text-muted-foreground">{workers.length} ta mutaxassis</p>
-          </div>
-          <button
-            onClick={() => setShowFilters(true)}
-            className="p-3 rounded-xl hover:bg-muted transition-colors shadow-sm border border-border"
-          >
-            <Filter className="w-5 h-5" />
-          </button>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card className="ios-card">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Jami ustalar</p>
+                <p className="text-2xl font-bold text-foreground">{totalWorkers}</p>
+              </div>
+              <Users className="h-8 w-8 text-primary" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="ios-card">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Mavjud ustalar</p>
+                <p className="text-2xl font-bold text-green-600">{availableWorkers}</p>
+              </div>
+              <Briefcase className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="ios-card">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">O'rtacha reyting</p>
+                <p className="text-2xl font-bold text-yellow-600">{averageRating.toFixed(1)}</p>
+              </div>
+              <Star className="h-8 w-8 text-yellow-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="ios-card">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Tanlangan</p>
+                <p className="text-2xl font-bold text-blue-600">{selectedRows.length}</p>
+              </div>
+              <Users className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Actions */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Ustalarni qidirish..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
         </div>
 
-        {/* Search Bar */}
-        <form onSubmit={handleSearch} className="relative">
-          <div className="relative group">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
-            <input
-              type="text"
-              placeholder="Ishchi, kasb yoki ko'nikma qidirish..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-muted rounded-lg border-0 focus:ring-2 focus:ring-primary/20 focus:bg-background transition-all duration-200 text-sm"
-            />
-          </div>
-        </form>
-
-        {/* Active Filters */}
-        {(filters.profession || filters.location || filters.minRating > 0 || filters.maxRate < 999999) && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {filters.profession && (
-              <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">{filters.profession}</span>
-            )}
-            {filters.location && (
-              <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">{filters.location}</span>
-            )}
-            {filters.minRating > 0 && (
-              <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
-                {filters.minRating}+ yulduz
-              </span>
-            )}
-            {filters.maxRate < 999999 && (
-              <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
-                {new Intl.NumberFormat("uz-UZ").format(filters.maxRate)} so'm gacha
-              </span>
-            )}
-          </div>
+        {selectedRows.length > 0 && (
+          <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)} className="ios-button">
+            <Trash2 className="h-4 w-4 mr-2" />
+            O'chirish ({selectedRows.length})
+          </Button>
         )}
       </div>
 
-      {/* Workers List */}
-      <div className="container mx-auto px-4 py-6">
-        {loading ? (
-          <div className="space-y-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="bg-card rounded-xl p-4 animate-pulse border border-border">
-                <div className="flex space-x-4">
-                  <div className="w-16 h-16 bg-muted rounded-full"></div>
-                  <div className="flex-1 space-y-2">
-                    <div className="h-5 bg-muted rounded w-3/4"></div>
-                    <div className="h-4 bg-muted rounded w-1/2"></div>
-                    <div className="h-4 bg-muted rounded w-2/3"></div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : workers.length > 0 ? (
-          <div className="space-y-4">
-            {workers.map((worker) => (
-              <div
-                key={worker.id}
-                className="bg-card rounded-xl p-4 border border-border hover:shadow-md transition-all cursor-pointer"
-                onClick={() => handleWorkerSelect(worker)}
-              >
-                <div className="flex space-x-4">
-                  {/* Avatar */}
-                  <div className="w-16 h-16 bg-muted rounded-full overflow-hidden flex-shrink-0">
-                    {worker.avatar_url ? (
-                      <Image
-                        src={worker.avatar_url || "/placeholder.svg"}
-                        alt={`${worker.first_name} ${worker.last_name}`}
-                        width={64}
-                        height={64}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-muted flex items-center justify-center">
-                        <span className="text-foreground font-semibold text-lg">
-                          {worker.first_name[0]}
-                          {worker.last_name[0]}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+      {/* Main Content */}
+      <Tabs defaultValue="grid" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-1 max-w-md">
+          <TabsTrigger value="grid">Kartalar</TabsTrigger>
+        </TabsList>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <h3 className="font-semibold">
+        <TabsContent value="grid" className="space-y-6">
+          {filteredWorkers.length === 0 ? (
+            <Card className="ios-card">
+              <CardContent className="p-12 text-center">
+                <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <h3 className="text-lg font-semibold mb-2">Ustalar topilmadi</h3>
+                <p className="text-muted-foreground mb-4">
+                  {searchQuery ? "Qidiruv bo'yicha natija topilmadi" : "Hozircha ustalar qo'shilmagan"}
+                </p>
+                <Button onClick={() => setShowWorkerDialog(true)} className="ios-button">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Birinchi ustani qo'shish
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredWorkers.map((worker) => (
+                <Card
+                  key={worker.id}
+                  className={`ios-card cursor-pointer transition-all hover:shadow-lg ${
+                    selectedRows.includes(worker.id) ? "ring-2 ring-primary" : ""
+                  }`}
+                  onClick={() => {
+                    if (selectedRows.includes(worker.id)) {
+                      setSelectedRows(selectedRows.filter((id) => id !== worker.id))
+                    } else {
+                      setSelectedRows([...selectedRows, worker.id])
+                    }
+                  }}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="text-lg">
                           {worker.first_name} {worker.last_name}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">{worker.profession_uz}</p>
+                        </CardTitle>
+                        <CardDescription className="flex items-center gap-1 mt-1">
+                          <Briefcase className="h-3 w-3" />
+                          {worker.profession_uz}
+                        </CardDescription>
                       </div>
-                      <div className="flex items-center space-x-1">
-                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                        <span className="text-sm font-medium">{worker.rating.toFixed(1)}</span>
-                        <span className="text-sm text-muted-foreground">({worker.review_count})</span>
-                      </div>
+                      <Badge variant={worker.is_available ? "default" : "secondary"}>
+                        {worker.is_available ? "Mavjud" : "Band"}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <MapPin className="h-3 w-3" />
+                      <span>{worker.location}</span>
                     </div>
 
-                    <div className="flex items-center space-x-4 mb-3">
-                      <div className="flex items-center space-x-1">
-                        <MapPin className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">{worker.location}</span>
-                      </div>
-                      <div className="text-sm text-muted-foreground">{worker.experience_years} yil tajriba</div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Phone className="h-3 w-3" />
+                      <span>{worker.phone_number}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      <span>{worker.experience_years} yil tajriba</span>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-bold">
-                          {new Intl.NumberFormat("uz-UZ").format(worker.hourly_rate)} so'm
-                        </span>
-                        <span className="text-sm text-muted-foreground ml-1">/soat</span>
+                      <div className="flex items-center gap-1">
+                        <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                        <span className="text-sm font-medium">{worker.rating}</span>
                       </div>
-                      <button
+                      <div className="text-sm font-medium text-primary">
+                        {worker.hourly_rate.toLocaleString()} so'm/soat
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleContactWorker(worker.phone_number)
+                          setSelectedWorker(worker)
+                          setShowViewDialog(true)
                         }}
-                        className="flex items-center space-x-1 px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-sm"
+                        className="flex-1 ios-button bg-transparent"
                       >
-                        <Phone className="w-4 h-4" />
-                        <span>Qo'ng'iroq</span>
-                      </button>
+                        <Eye className="h-3 w-3 mr-1" />
+                        Ko'rish
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleEditWorker(worker)
+                        }}
+                        className="flex-1 ios-button bg-transparent"
+                      >
+                        <Edit className="h-3 w-3 mr-1" />
+                        Tahrirlash
+                      </Button>
                     </div>
-                  </div>
-                </div>
-
-                {/* Skills */}
-                {worker.skills && worker.skills.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-border">
-                    <div className="flex flex-wrap gap-2">
-                      {worker.skills.slice(0, 3).map((skill, index) => (
-                        <span key={index} className="px-2 py-1 bg-muted text-foreground text-xs rounded-lg">
-                          {skill}
-                        </span>
-                      ))}
-                      {worker.skills.length > 3 && (
-                        <span className="px-2 py-1 bg-muted text-muted-foreground text-xs rounded-lg">
-                          +{worker.skills.length - 3} ko'proq
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-              <Filter className="w-8 h-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">Ishchi topilmadi</h3>
-            <p className="text-muted-foreground mb-4">Qidiruv so'zini o'zgartiring yoki filtrlarni o'zgartiring</p>
-            <button
-              onClick={clearFilters}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              Filtrlarni tozalash
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Filter Bottom Sheet */}
-      <BottomSheet isOpen={showFilters} onClose={() => setShowFilters(false)} title="Filtrlar">
-        <div className="p-6 space-y-6">
-          {/* Profession Filter */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Mutaxassislik</label>
-            <select
-              value={filters.profession}
-              onChange={(e) => setFilters({ ...filters, profession: e.target.value })}
-              className="w-full px-3 py-2 bg-muted rounded-lg border-0 focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="">Barchasi</option>
-              {professions.map((profession) => (
-                <option key={profession} value={profession}>
-                  {profession}
-                </option>
+                  </CardContent>
+                </Card>
               ))}
-            </select>
-          </div>
-
-          {/* Location Filter */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Joylashuv</label>
-            <select
-              value={filters.location}
-              onChange={(e) => setFilters({ ...filters, location: e.target.value })}
-              className="w-full px-3 py-2 bg-muted rounded-lg border-0 focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="">Barchasi</option>
-              {locations.map((location) => (
-                <option key={location} value={location}>
-                  {location}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Rating Filter */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Minimal reyting</label>
-            <select
-              value={filters.minRating}
-              onChange={(e) => setFilters({ ...filters, minRating: Number(e.target.value) })}
-              className="w-full px-3 py-2 bg-muted rounded-lg border-0 focus:ring-2 focus:ring-primary/20"
-            >
-              <option value={0}>Barchasi</option>
-              <option value={3}>3+ yulduz</option>
-              <option value={4}>4+ yulduz</option>
-              <option value={4.5}>4.5+ yulduz</option>
-            </select>
-          </div>
-
-          {/* Rate Filter */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Maksimal soatlik narx</label>
-            <input
-              type="number"
-              value={filters.maxRate === 999999 ? "" : filters.maxRate}
-              onChange={(e) => setFilters({ ...filters, maxRate: e.target.value ? Number(e.target.value) : 999999 })}
-              placeholder="Cheklovsiz"
-              className="w-full px-3 py-2 bg-muted rounded-lg border-0 focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex space-x-3 pt-4">
-            <button
-              onClick={clearFilters}
-              className="flex-1 py-3 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 transition-colors"
-            >
-              Tozalash
-            </button>
-            <button
-              onClick={applyFilters}
-              className="flex-1 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              Qo'llash
-            </button>
-          </div>
-        </div>
-      </BottomSheet>
-
-      <BottomNavigation />
-
-      {/* Worker Detail Bottom Sheet - Full Screen */}
-      <BottomSheet
-        isOpen={showWorkerSheet}
-        onClose={() => setShowWorkerSheet(false)}
-        title="Ishchi haqida"
-        height="full"
-      >
-        {selectedWorker && (
-          <div className="p-6 h-full flex flex-col">
-            {/* Worker Header */}
-            <div className="flex space-x-4 mb-6">
-              <div className="w-20 h-20 bg-muted rounded-full overflow-hidden flex-shrink-0">
-                {selectedWorker.avatar_url ? (
-                  <Image
-                    src={selectedWorker.avatar_url || "/placeholder.svg"}
-                    alt={`${selectedWorker.first_name} ${selectedWorker.last_name}`}
-                    width={80}
-                    height={80}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-muted flex items-center justify-center">
-                    <span className="text-foreground font-semibold text-2xl">
-                      {selectedWorker.first_name[0]}
-                      {selectedWorker.last_name[0]}
-                    </span>
-                  </div>
-                )}
-              </div>
-              <div className="flex-1">
-                <h3 className="text-xl font-bold mb-1">
-                  {selectedWorker.first_name} {selectedWorker.last_name}
-                </h3>
-                <p className="text-muted-foreground mb-2">{selectedWorker.profession_uz}</p>
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-1">
-                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                    <span className="font-medium">{selectedWorker.rating.toFixed(1)}</span>
-                    <span className="text-sm text-muted-foreground">({selectedWorker.review_count} sharh)</span>
-                  </div>
-                </div>
-              </div>
             </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
-            {/* Details */}
-            <div className="flex-1 space-y-6">
-              {/* Experience & Location */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-muted/50 rounded-xl p-4">
-                  <h4 className="text-sm text-muted-foreground mb-1">Tajriba</h4>
-                  <p className="font-semibold">{selectedWorker.experience_years} yil</p>
-                </div>
-                <div className="bg-muted/50 rounded-xl p-4">
-                  <h4 className="text-sm text-muted-foreground mb-1">Joylashuv</h4>
-                  <p className="font-semibold">{selectedWorker.location}</p>
-                </div>
-              </div>
+      {/* Worker Dialog */}
+      <WorkerDialog
+        worker={editingWorker}
+        onSaved={handleWorkerSaved}
+        onClose={() => {
+          setShowWorkerDialog(false)
+          setEditingWorker(null)
+        }}
+        open={showWorkerDialog}
+      />
 
-              {/* Pricing */}
-              <div>
-                <h4 className="font-semibold mb-3">Narxlar</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
-                    <h5 className="text-sm text-primary mb-1">Soatlik</h5>
-                    <p className="text-lg font-bold text-primary">
-                      {new Intl.NumberFormat("uz-UZ").format(selectedWorker.hourly_rate)} so'm
-                    </p>
-                  </div>
-                  <div className="bg-muted/50 rounded-xl p-4">
-                    <h5 className="text-sm text-muted-foreground mb-1">Kunlik</h5>
-                    <p className="text-lg font-bold">
-                      {new Intl.NumberFormat("uz-UZ").format(selectedWorker.daily_rate)} so'm
-                    </p>
-                  </div>
-                </div>
-              </div>
+      {/* Worker View Dialog */}
+      {showViewDialog && selectedWorker && (
+        <WorkerViewDialog
+          worker={selectedWorker}
+          onClose={() => {
+            setShowViewDialog(false)
+            setSelectedWorker(null)
+          }}
+        />
+      )}
 
-              {/* Skills */}
-              {selectedWorker.skills && selectedWorker.skills.length > 0 && (
-                <div>
-                  <h4 className="font-semibold mb-3">Ko'nikmalar</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedWorker.skills.map((skill, index) => (
-                      <span key={index} className="px-3 py-2 bg-muted text-foreground rounded-lg">
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-destructive">Ustalarni o'chirish</DialogTitle>
+              <DialogDescription>
+                {selectedRows.length} ta ustani o'chirishni tasdiqlash uchun MD parolni kiriting
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {deleteError && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-200 text-sm">
+                  {deleteError}
                 </div>
               )}
-            </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-3 pt-6 border-t border-border">
-              <button
-                onClick={() => handleContactWorker(selectedWorker.phone_number)}
-                className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-medium hover:bg-primary/90 transition-colors flex items-center justify-center space-x-2 shadow-sm"
-              >
-                <Phone className="w-5 h-5" />
-                <span>Qo'ng'iroq qilish</span>
-              </button>
-              <button className="w-full bg-secondary text-secondary-foreground rounded-xl py-3 font-medium hover:bg-secondary/80 transition-colors">
-                Buyurtma berish
-              </button>
+              <div className="space-y-2">
+                <Label htmlFor="delete-password">MD Parol</Label>
+                <Input
+                  id="delete-password"
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="MD parolni kiriting"
+                  pattern="[0-9]*"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowDeleteConfirm(false)
+                    setDeletePassword("")
+                    setDeleteError("")
+                  }}
+                  className="flex-1 ios-button bg-transparent"
+                >
+                  Bekor qilish
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteSelected}
+                  disabled={deleteLoading || !deletePassword}
+                  className="flex-1 ios-button"
+                >
+                  {deleteLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      O'chirilmoqda...
+                    </>
+                  ) : (
+                    "O'chirish"
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
-      </BottomSheet>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }
