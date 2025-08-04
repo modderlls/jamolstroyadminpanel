@@ -4,6 +4,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
+import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -141,30 +142,51 @@ export default function AdminLoginPage() {
     setEmailLoginError("")
 
     try {
-      const response = await fetch("/api/admin-login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
+      // Use Supabase client directly for authentication
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       })
 
-      const data = await response.json()
+      if (error) {
+        console.error("Supabase auth error:", error)
+        setEmailLoginError("Noto'g'ri email yoki parol")
+        return
+      }
 
-      if (mountedRef.current) {
-        if (response.ok && data.authenticated) {
-          setIsAuthenticated(true)
-          setAuthenticatedUser(data)
-          setEmailLoginError("")
-        } else {
-          setEmailLoginError(data.error || "Login xatoligi")
-        }
+      if (!data.user) {
+        setEmailLoginError("Foydalanuvchi topilmadi")
+        return
+      }
+
+      // Check if user is admin
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", data.user.id)
+        .single()
+
+      if (userError || !userData || userData.role !== "admin") {
+        setEmailLoginError("Admin huquqi talab qilinadi")
+        await supabase.auth.signOut()
+        return
+      }
+
+      // Success - set authenticated state
+      setIsAuthenticated(true)
+      setAuthenticatedUser({
+        user: userData,
+        session: data.session,
+      })
+      setEmailLoginError("")
+
+      // Set user data in context immediately
+      if (data.session) {
+        setUserData(userData, data.session)
       }
     } catch (error) {
       console.error("Email login error:", error)
-      if (mountedRef.current) {
-        setEmailLoginError("Login xatoligi")
-      }
+      setEmailLoginError("Login xatoligi")
     } finally {
       if (mountedRef.current) {
         setEmailLoginLoading(false)
@@ -221,7 +243,10 @@ export default function AdminLoginPage() {
     setTelegramUrl("")
   }
 
-  const resetToEmailLogin = () => {
+  const resetToEmailLogin = async () => {
+    // Sign out from Supabase
+    await supabase.auth.signOut()
+
     setIsAuthenticated(false)
     setAuthenticatedUser(null)
     setEmail("")

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 // Email/Password login endpoint
 export async function POST(request: NextRequest) {
@@ -8,8 +8,6 @@ export async function POST(request: NextRequest) {
 
     // If email and password provided, authenticate with Supabase
     if (email && password) {
-      const supabase = createServerClient()
-
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -35,19 +33,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Admin huquqi talab qilinadi" }, { status: 403 })
       }
 
-      // Return success with user data
+      // Return success with user data and session
       return NextResponse.json({
         success: true,
         message: "Email/parol orqali muvaffaqiyatli kirildi",
         authenticated: true,
         user: userData,
         session: data.session,
+        access_token: data.session?.access_token,
       })
     }
 
     // If client_id provided, create Telegram session (only after email/password auth)
     if (client_id) {
-      const supabase = createServerClient()
       const tempToken = Math.random().toString(36).substring(2) + Date.now().toString(36)
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
 
@@ -97,7 +95,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Token talab qilinadi" }, { status: 400 })
     }
 
-    const supabase = createServerClient()
     const { data: session, error } = await supabase
       .from("website_login_sessions")
       .select(`

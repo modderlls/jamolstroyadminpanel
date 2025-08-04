@@ -42,27 +42,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Get initial session
     const getInitialSession = async () => {
-      const {
-        data: { session: initialSession },
-      } = await supabase.auth.getSession()
+      try {
+        const {
+          data: { session: initialSession },
+        } = await supabase.auth.getSession()
 
-      if (initialSession?.user) {
-        // Get user data from database
-        const { data: userData, error } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", initialSession.user.id)
-          .single()
+        if (initialSession?.user) {
+          // Get user data from database
+          const { data: userData, error } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", initialSession.user.id)
+            .single()
 
-        if (!error && userData && userData.role === "admin") {
-          setUser(userData)
-          setSession(initialSession)
-          // Set cookie for middleware
-          document.cookie = `jamolstroy_admin_token=${userData.id}; path=/; max-age=${7 * 24 * 60 * 60}`
+          if (!error && userData && userData.role === "admin") {
+            setUser(userData)
+            setSession(initialSession)
+            // Set cookie for middleware
+            document.cookie = `jamolstroy_admin_token=${userData.id}; path=/; max-age=${7 * 24 * 60 * 60}`
+            // Store in localStorage as backup
+            localStorage.setItem("jamolstroy_admin", JSON.stringify(userData))
+            localStorage.setItem("jamolstroy_session", JSON.stringify(initialSession))
+          } else {
+            // Not admin or error, clear session
+            await supabase.auth.signOut()
+            localStorage.removeItem("jamolstroy_admin")
+            localStorage.removeItem("jamolstroy_session")
+          }
         } else {
-          // Not admin or error, clear session
-          await supabase.auth.signOut()
+          // No session, check localStorage
+          const storedUser = localStorage.getItem("jamolstroy_admin")
+          const storedSession = localStorage.getItem("jamolstroy_session")
+
+          if (storedUser && storedSession) {
+            try {
+              const userData = JSON.parse(storedUser)
+              const sessionData = JSON.parse(storedSession)
+
+              if (userData.role === "admin") {
+                setUser(userData)
+                setSession(sessionData)
+                document.cookie = `jamolstroy_admin_token=${userData.id}; path=/; max-age=${7 * 24 * 60 * 60}`
+              }
+            } catch (error) {
+              console.error("Error parsing stored data:", error)
+              localStorage.removeItem("jamolstroy_admin")
+              localStorage.removeItem("jamolstroy_session")
+            }
+          }
         }
+      } catch (error) {
+        console.error("Error getting initial session:", error)
       }
       setLoading(false)
     }
@@ -73,6 +103,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state changed:", event, session)
+
       if (event === "SIGNED_IN" && session?.user) {
         // Get user data from database
         const { data: userData, error } = await supabase.from("users").select("*").eq("id", session.user.id).single()
@@ -82,14 +114,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSession(session)
           // Set cookie for middleware
           document.cookie = `jamolstroy_admin_token=${userData.id}; path=/; max-age=${7 * 24 * 60 * 60}`
+          // Store in localStorage
+          localStorage.setItem("jamolstroy_admin", JSON.stringify(userData))
+          localStorage.setItem("jamolstroy_session", JSON.stringify(session))
         } else {
           // Not admin, sign out
           await supabase.auth.signOut()
+          localStorage.removeItem("jamolstroy_admin")
+          localStorage.removeItem("jamolstroy_session")
         }
       } else if (event === "SIGNED_OUT") {
         setUser(null)
         setSession(null)
         document.cookie = "jamolstroy_admin_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
+        localStorage.removeItem("jamolstroy_admin")
+        localStorage.removeItem("jamolstroy_session")
       }
       setLoading(false)
     })
@@ -101,6 +140,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(userData)
     setSession(sessionData)
     document.cookie = `jamolstroy_admin_token=${userData.id}; path=/; max-age=${7 * 24 * 60 * 60}`
+    localStorage.setItem("jamolstroy_admin", JSON.stringify(userData))
+    localStorage.setItem("jamolstroy_session", JSON.stringify(sessionData))
   }
 
   const logout = async () => {
@@ -108,6 +149,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null)
     setSession(null)
     document.cookie = "jamolstroy_admin_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
+    localStorage.removeItem("jamolstroy_admin")
+    localStorage.removeItem("jamolstroy_session")
   }
 
   return <AuthContext.Provider value={{ user, loading, session, logout, setUserData }}>{children}</AuthContext.Provider>
