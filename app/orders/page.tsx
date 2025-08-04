@@ -64,6 +64,7 @@ interface Order {
     products: {
       name_uz: string
       images: string[]
+      variations?: string // Added variations to product interface
     }
   }>
 }
@@ -125,7 +126,7 @@ export default function OrdersPage() {
             quantity,
             unit_price,
             total_price,
-            products(name_uz, images)
+            products(name_uz, images, variations)
           )
         `,
         { count: "exact" },
@@ -279,6 +280,24 @@ export default function OrdersPage() {
       totalAmount: validOrders.reduce((sum, order) => sum + order.total_amount, 0),
     }
   }
+
+  const getProductVariations = (variationsString?: string) => {
+    if (!variationsString) return null;
+    try {
+      // Supabase often returns JSONB as a string that needs to be parsed twice
+      // First, to get rid of the outer string quotes and escape characters
+      // Second, to parse the actual JSON array
+      const cleanedString = variationsString.replace(/^"|"$/g, '').replace(/\\"/g, '"');
+      const variations = JSON.parse(cleanedString);
+      if (Array.isArray(variations) && variations.length > 0) {
+        const variation = variations[0]; // Assuming we only need the first variation
+        return `${variation.type}: ${variation.name}`;
+      }
+    } catch (error) {
+      console.error("Error parsing variations:", variationsString, error);
+    }
+    return null;
+  };
 
   const analytics = getAnalyticsData()
 
@@ -495,6 +514,11 @@ export default function OrdersPage() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-medium line-clamp-1">{item.products.name_uz}</p>
+                              {getProductVariations(item.products.variations) && (
+                                <p className="text-xs text-muted-foreground">
+                                  {getProductVariations(item.products.variations)}
+                                </p>
+                              )}
                               <p className="text-xs text-muted-foreground">
                                 {item.quantity} x {item.unit_price.toLocaleString()} so'm
                               </p>
