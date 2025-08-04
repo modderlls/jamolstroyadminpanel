@@ -64,7 +64,7 @@ interface Order {
     products: {
       name_uz: string
       images: string[]
-      specifications?: string // Changed from variations to specifications
+      specifications?: any // Changed type to any as it can be object or string
     }
   }>
 }
@@ -281,21 +281,41 @@ export default function OrdersPage() {
     }
   }
 
-  const getProductSpecifications = (specificationsString?: string) => {
-    if (!specificationsString) return null;
-    try {
-      // Supabase often returns JSONB as a string that needs to be parsed twice
-      // First, to get rid of the outer string quotes and escape characters
-      // Second, to parse the actual JSON array
-      const cleanedString = specificationsString.replace(/^"|"$/g, '').replace(/\\"/g, '"');
-      const specifications = JSON.parse(cleanedString);
-      if (Array.isArray(specifications) && specifications.length > 0) {
-        const spec = specifications[0]; // Assuming we only need the first specification
+  const getProductSpecifications = (specificationsData?: any) => {
+    if (!specificationsData) return null;
+
+    let specifications;
+    // Attempt to parse if it's a string, otherwise assume it's already an object
+    if (typeof specificationsData === 'string') {
+      try {
+        specifications = JSON.parse(specificationsData);
+      } catch (error) {
+        console.error("Error parsing specifications string:", specificationsData, error);
+        return null;
+      }
+    } else {
+      specifications = specificationsData;
+    }
+
+    // Check if specifications is an object (like {"Rang": [...]})
+    if (typeof specifications === 'object' && !Array.isArray(specifications)) {
+      const specEntries = Object.entries(specifications);
+      if (specEntries.length > 0) {
+        // Assuming the first key-value pair is what we need for display
+        const [type, values] = specEntries[0];
+        if (Array.isArray(values) && values.length > 0 && values[0].name) {
+          return `${type}: ${values[0].name}`;
+        }
+      }
+    }
+    // If it's directly an array of objects like [{"type":"O'lchami","name":"12 lik","value":"12","price":null}]
+    else if (Array.isArray(specifications) && specifications.length > 0) {
+      const spec = specifications[0];
+      if (spec.type && spec.name) {
         return `${spec.type}: ${spec.name}`;
       }
-    } catch (error) {
-      console.error("Error parsing specifications:", specificationsString, error);
     }
+
     return null;
   };
 
