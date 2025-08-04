@@ -64,7 +64,7 @@ interface Order {
     products: {
       name_uz: string
       images: string[]
-      variations?: string // Added variations to product interface
+      specifications?: string // Changed from variations to specifications
     }
   }>
 }
@@ -126,7 +126,7 @@ export default function OrdersPage() {
             quantity,
             unit_price,
             total_price,
-            products(name_uz, images, variations)
+            products(name_uz, images, specifications)
           )
         `,
         { count: "exact" },
@@ -281,20 +281,20 @@ export default function OrdersPage() {
     }
   }
 
-  const getProductVariations = (variationsString?: string) => {
-    if (!variationsString) return null;
+  const getProductSpecifications = (specificationsString?: string) => {
+    if (!specificationsString) return null;
     try {
       // Supabase often returns JSONB as a string that needs to be parsed twice
       // First, to get rid of the outer string quotes and escape characters
       // Second, to parse the actual JSON array
-      const cleanedString = variationsString.replace(/^"|"$/g, '').replace(/\\"/g, '"');
-      const variations = JSON.parse(cleanedString);
-      if (Array.isArray(variations) && variations.length > 0) {
-        const variation = variations[0]; // Assuming we only need the first variation
-        return `${variation.type}: ${variation.name}`;
+      const cleanedString = specificationsString.replace(/^"|"$/g, '').replace(/\\"/g, '"');
+      const specifications = JSON.parse(cleanedString);
+      if (Array.isArray(specifications) && specifications.length > 0) {
+        const spec = specifications[0]; // Assuming we only need the first specification
+        return `${spec.type}: ${spec.name}`;
       }
     } catch (error) {
-      console.error("Error parsing variations:", variationsString, error);
+      console.error("Error parsing specifications:", specificationsString, error);
     }
     return null;
   };
@@ -514,9 +514,9 @@ export default function OrdersPage() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-medium line-clamp-1">{item.products.name_uz}</p>
-                              {getProductVariations(item.products.variations) && (
+                              {getProductSpecifications(item.products.specifications) && (
                                 <p className="text-xs text-muted-foreground">
-                                  {getProductVariations(item.products.variations)}
+                                  {getProductSpecifications(item.products.specifications)}
                                 </p>
                               )}
                               <p className="text-xs text-muted-foreground">
