@@ -92,7 +92,7 @@ export default function AdminLoginPage() {
           setTimeout(() => {
             if (mountedRef.current && !hasRedirectedRef.current) {
               hasRedirectedRef.current = true
-              window.location.replace("/")
+              router.replace("/")
             }
           }, 1500)
         } else if (data.status === "rejected" || data.status === "unauthorized") {
