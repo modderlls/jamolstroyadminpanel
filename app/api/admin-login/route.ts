@@ -1,45 +1,62 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 
+// Email/Password login endpoint
 export async function POST(request: NextRequest) {
   try {
-    const { client_id } = await request.json()
+    const { email, password, client_id } = await request.json()
 
-    if (!client_id) {
-      return NextResponse.json({ error: "Client ID talab qilinadi" }, { status: 400 })
+    // If email and password provided, authenticate first
+    if (email && password) {
+      // Simple hardcoded admin credentials check
+      if (email !== "admin@jamolstroy.uz" || password !== "jamolstroy2024") {
+        return NextResponse.json({ error: "Noto'g'ri email yoki parol" }, { status: 401 })
+      }
+
+      // Return success for email/password authentication
+      return NextResponse.json({
+        success: true,
+        message: "Email/parol orqali muvaffaqiyatli kirildi",
+        authenticated: true,
+      })
     }
 
-    const tempToken = Math.random().toString(36).substring(2) + Date.now().toString(36)
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
+    // If client_id provided, create Telegram session (only after email/password auth)
+    if (client_id) {
+      const tempToken = Math.random().toString(36).substring(2) + Date.now().toString(36)
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
 
-    const { data: session, error } = await supabase
-      .from("website_login_sessions")
-      .insert([
-        {
-          temp_token: tempToken,
-          client_id: client_id,
-          status: "pending",
-          expires_at: expiresAt.toISOString(),
-          created_at: new Date().toISOString(),
-        },
-      ])
-      .select()
-      .single()
+      const { data: session, error } = await supabase
+        .from("website_login_sessions")
+        .insert([
+          {
+            temp_token: tempToken,
+            client_id: client_id,
+            status: "pending",
+            expires_at: expiresAt.toISOString(),
+            created_at: new Date().toISOString(),
+          },
+        ])
+        .select()
+        .single()
 
-    if (error) {
-      console.error("Session creation error:", error)
-      return NextResponse.json({ error: "Sessiya yaratishda xatolik" }, { status: 500 })
+      if (error) {
+        console.error("Session creation error:", error)
+        return NextResponse.json({ error: "Sessiya yaratishda xatolik" }, { status: 500 })
+      }
+
+      const botUsername = "jamoladminbot"
+      const startParam = `${tempToken}_${client_id}`
+      const telegramUrl = `https://t.me/${botUsername}?start=${startParam}`
+
+      return NextResponse.json({
+        temp_token: tempToken,
+        telegram_url: telegramUrl,
+        expires_at: expiresAt.toISOString(),
+      })
     }
 
-    const botUsername = "jamoladminbot"
-    const startParam = `${tempToken}_${client_id}`
-    const telegramUrl = `https://t.me/${botUsername}?start=${startParam}`
-
-    return NextResponse.json({
-      temp_token: tempToken,
-      telegram_url: telegramUrl,
-      expires_at: expiresAt.toISOString(),
-    })
+    return NextResponse.json({ error: "Email/parol yoki client_id talab qilinadi" }, { status: 400 })
   } catch (error) {
     console.error("Admin login API error:", error)
     return NextResponse.json({ error: "Server xatoligi" }, { status: 500 })

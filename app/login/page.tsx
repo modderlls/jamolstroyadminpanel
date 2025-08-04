@@ -1,16 +1,28 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, MessageCircle, ExternalLink, CheckCircle, XCircle, Clock, Shield } from "lucide-react"
+import { Loader2, MessageCircle, ExternalLink, CheckCircle, XCircle, Clock, Shield, Mail } from "lucide-react"
 
 export default function AdminLoginPage() {
   const router = useRouter()
   const { user, loading } = useAuth()
 
+  // Email/Password login state
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [emailLoginLoading, setEmailLoginLoading] = useState(false)
+  const [emailLoginError, setEmailLoginError] = useState("")
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  // Telegram login state
   const [isLoading, setIsLoading] = useState(false)
   const [telegramUrl, setTelegramUrl] = useState("")
   const [tempToken, setTempToken] = useState("")
@@ -117,8 +129,46 @@ export default function AdminLoginPage() {
     }
   }, [tempToken, loginStatus])
 
-  const handleTelegramLogin = async () => {
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
     if (!mountedRef.current) return
+
+    setEmailLoginLoading(true)
+    setEmailLoginError("")
+
+    try {
+      const response = await fetch("/api/admin-login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      })
+
+      const data = await response.json()
+
+      if (mountedRef.current) {
+        if (response.ok && data.authenticated) {
+          setIsAuthenticated(true)
+          setEmailLoginError("")
+        } else {
+          setEmailLoginError(data.error || "Login xatoligi")
+        }
+      }
+    } catch (error) {
+      console.error("Email login error:", error)
+      if (mountedRef.current) {
+        setEmailLoginError("Login xatoligi")
+      }
+    } finally {
+      if (mountedRef.current) {
+        setEmailLoginLoading(false)
+      }
+    }
+  }
+
+  const handleTelegramLogin = async () => {
+    if (!mountedRef.current || !isAuthenticated) return
 
     try {
       setIsLoading(true)
@@ -166,6 +216,14 @@ export default function AdminLoginPage() {
     setTelegramUrl("")
   }
 
+  const resetToEmailLogin = () => {
+    setIsAuthenticated(false)
+    setEmail("")
+    setPassword("")
+    setEmailLoginError("")
+    resetLogin()
+  }
+
   // Show loading while checking auth
   if (loading) {
     return (
@@ -198,10 +256,66 @@ export default function AdminLoginPage() {
             <Shield className="h-8 w-8 text-primary-foreground" />
           </div>
           <CardTitle className="text-2xl text-foreground">JamolStroy Admin</CardTitle>
-          <CardDescription>Admin panel uchun Telegram orqali kiring</CardDescription>
+          <CardDescription>
+            {!isAuthenticated ? "Admin panel uchun email va parol bilan kiring" : "Telegram orqali tasdiqlang"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {loginStatus === "pending" ? (
+          {!isAuthenticated ? (
+            // Email/Password Login Form
+            <form onSubmit={handleEmailLogin} className="space-y-4">
+              {emailLoginError && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-200 text-sm">
+                  {emailLoginError}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@jamolstroy.uz"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">Parol</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Parolni kiriting"
+                  required
+                />
+              </div>
+
+              <Button type="submit" disabled={emailLoginLoading || !email || !password} className="w-full ios-button">
+                {emailLoginLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Tekshirilmoqda...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="h-4 w-4 mr-2" />
+                    Kirish
+                  </>
+                )}
+              </Button>
+
+              <div className="bg-muted border border-border rounded-xl p-3">
+                <p className="text-sm text-foreground">
+                  🔒 Bu admin panel. Faqat admin huquqiga ega foydalanuvchilar kirishi mumkin.
+                </p>
+              </div>
+            </form>
+          ) : loginStatus === "pending" ? (
+            // Telegram Confirmation
             <div className="text-center space-y-4">
               <div className="animate-pulse">
                 <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -223,35 +337,50 @@ export default function AdminLoginPage() {
                   Telegram botni ochish
                 </Button>
               )}
-              <Button variant="ghost" onClick={resetLogin} className="w-full ios-button">
-                Bekor qilish
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={resetLogin} className="flex-1 ios-button">
+                  Bekor qilish
+                </Button>
+                <Button variant="outline" onClick={resetToEmailLogin} className="flex-1 ios-button bg-transparent">
+                  Orqaga
+                </Button>
+              </div>
             </div>
           ) : loginStatus === "approved" ? (
+            // Success
             <div className="text-center space-y-4">
               <CheckCircle className="h-12 w-12 mx-auto text-green-500" />
               <h3 className="text-lg font-semibold text-green-600">Admin login muvaffaqiyatli!</h3>
               <p className="text-muted-foreground text-sm">Admin panelga yo'naltirilmoqda...</p>
             </div>
           ) : loginStatus === "rejected" ? (
+            // Rejected
             <div className="text-center space-y-4">
               <XCircle className="h-12 w-12 mx-auto text-red-500" />
               <h3 className="text-lg font-semibold text-red-600">Login rad etildi</h3>
               <p className="text-muted-foreground text-sm">Admin huquqi yo'q yoki login rad etildi</p>
-              <Button onClick={resetLogin} className="w-full ios-button">
-                Qayta urinish
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={resetLogin} className="flex-1 ios-button">
+                  Qayta urinish
+                </Button>
+                <Button variant="outline" onClick={resetToEmailLogin} className="flex-1 ios-button bg-transparent">
+                  Orqaga
+                </Button>
+              </div>
             </div>
           ) : (
+            // Authenticated, ready for Telegram
             <div className="text-center space-y-4">
-              <MessageCircle className="h-12 w-12 mx-auto text-foreground" />
-              <div>
-                <h3 className="text-lg font-semibold">Admin Panel</h3>
-                <p className="text-muted-foreground text-sm">Admin huquqiga ega Telegram akkauntingiz bilan kiring</p>
+              <div className="w-12 h-12 mx-auto bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center">
+                <CheckCircle className="h-6 w-6 text-green-600" />
               </div>
-              <div className="bg-muted border border-border rounded-xl p-3">
-                <p className="text-sm text-foreground">
-                  🔒 Bu admin panel. Faqat admin huquqiga ega foydalanuvchilar kirishi mumkin.
+              <div>
+                <h3 className="text-lg font-semibold text-green-600">Email/parol tasdiqlandi!</h3>
+                <p className="text-muted-foreground text-sm">Endi Telegram orqali yakuniy tasdiqlashni o'ting</p>
+              </div>
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  📱 Telegram orqali yakuniy tasdiqlash uchun tugmani bosing
                 </p>
               </div>
               <Button onClick={handleTelegramLogin} disabled={isLoading} className="w-full ios-button">
@@ -263,9 +392,12 @@ export default function AdminLoginPage() {
                 ) : (
                   <>
                     <MessageCircle className="h-4 w-4 mr-2" />
-                    Admin sifatida kirish
+                    Telegram orqali tasdiqlash
                   </>
                 )}
+              </Button>
+              <Button variant="outline" onClick={resetToEmailLogin} className="w-full ios-button bg-transparent">
+                Orqaga
               </Button>
             </div>
           )}
