@@ -88,7 +88,7 @@ export const ManualPriceInputDialog: React.FC<ManualPriceInputDialogProps> = ({
                 const key = `${item.id}_${v.type}_${v.name}`;
                 const newAdditionalPrice = itemPrices[key];
 
-                if (typeof newAdditionalPrice === 'undefined' || newAdditionalPrice < 0) {
+                if (typeof newAdditionalPrice === 'undefined' || newAdditionalPrice < 0) { // Price cannot be negative
                     toast.error(`"${v.type}: ${v.name}" uchun qo'shimcha narx kiritilishi shart (musbat son).`);
                     throw new Error("Qo'shimcha narx kiritilishi shart");
                 }
@@ -119,10 +119,10 @@ export const ManualPriceInputDialog: React.FC<ManualPriceInputDialogProps> = ({
         });
       }
 
-      // Execute updates for order_items in a loop (Supabase doesn't support batch update for different rows easily via .update().in())
+      // Execute updates for each order_item in `order_items` table
       for (const update of orderItemUpdates) {
         const { error: itemUpdateError } = await supabase
-          .from("order_items")
+          .from("order_items") // Target the order_items table
           .update({
             variations: update.variations,
             total_price: update.total_price // Update total_price of the individual order_item
@@ -142,8 +142,7 @@ export const ManualPriceInputDialog: React.FC<ManualPriceInputDialogProps> = ({
           is_agree: true, // Mark as agreed after prices are set
           status: "processing", // Move to processing
           updated_at: new Date().toISOString(),
-          // !!! IMPORTANT: DO NOT include 'order_items' here if it's a related table, not a column !!!
-          // If you did, it would try to update a non-existent column and cause PGRST204.
+          // DO NOT include 'order_items' here if it's a related table, not a column
         })
         .eq("id", order.id);
 
@@ -173,15 +172,15 @@ export const ManualPriceInputDialog: React.FC<ManualPriceInputDialogProps> = ({
   }, [order]);
 
 
-  if (!order || !hasManualPriceItems) {
-    return null; // Don't show dialog if no order or no manual price items found
+  if (!open || !order || !hasManualPriceItems) { // Check `open` prop as well
+    return null; // Don't show dialog if not open, no order, or no manual price items found
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Qo'shimcha narx kiritish</DialogTitle> {/* Corrected DialogTitle syntax */}
+          <DialogTitle>Qo'shimcha narx kiritish</DialogTitle>
           <DialogDescription>
             Ushbu buyurtmadagi ba'zi mahsulotlar uchun mijoz tomonidan kiritilgan turdagi qo'shimcha narxlar belgilanmagan. Iltimos, narxlarni kiriting.
           </DialogDescription>
