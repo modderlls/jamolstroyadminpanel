@@ -345,7 +345,7 @@ export function WorkerDialog({ worker, onSaved, onClose, open }: WorkerDialogPro
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
           {/* Basic Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Asosiy ma'lumotlar</h3>
@@ -381,27 +381,7 @@ export function WorkerDialog({ worker, onSaved, onClose, open }: WorkerDialogPro
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="profession_ru">Kasb (Rus)</Label>
-                <Input
-                  id="profession_ru"
-                  value={formData.profession_ru || ""}
-                  onChange={(e) => handleInputChange("profession_ru", e.target.value)}
-                  placeholder="Например: Строитель"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="profession_en">Kasb (Ingliz)</Label>
-                <Input
-                  id="profession_en"
-                  value={formData.profession_en || ""}
-                  onChange={(e) => handleInputChange("profession_en", e.target.value)}
-                  placeholder="Example: Builder"
-                />
-              </div>
-            </div>
-
+            
             <div className="space-y-2">
               <Label htmlFor="phone_number">Telefon raqami</Label>
               <Input
@@ -433,113 +413,17 @@ export function WorkerDialog({ worker, onSaved, onClose, open }: WorkerDialogPro
           </div>
 
           {/* Professional Information */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Professional ma'lumotlar</h3>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="experience_years">Tajriba (yil)</Label>
-                <Input
-                  id="experience_years"
-                  type="number"
-                  min="0"
-                  value={formData.experience_years}
-                  onChange={(e) => handleInputChange("experience_years", Number.parseInt(e.target.value) || 0)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="rating">Reyting (0-5)</Label>
-                <Input
-                  id="rating"
-                  type="number"
-                  min="0"
-                  max="5"
-                  step="0.1"
-                  value={formData.rating}
-                  onChange={(e) => handleInputChange("rating", Number.parseFloat(e.target.value) || 0)}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="hourly_rate">Soatlik narx (so'm)</Label>
-                <Input
-                  id="hourly_rate"
-                  type="number"
-                  min="0"
-                  value={formData.hourly_rate}
-                  onChange={(e) => handleInputChange("hourly_rate", Number.parseInt(e.target.value) || 0)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="daily_rate">Kunlik narx (so'm)</Label>
-                <Input
-                  id="daily_rate"
-                  type="number"
-                  min="0"
-                  value={formData.daily_rate}
-                  onChange={(e) => handleInputChange("daily_rate", Number.parseInt(e.target.value) || 0)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="skills">Ko'nikmalar (har birini yangi qatordan kiriting)</Label>
-              <Textarea
-                id="skills"
-                value={formData.skills?.join("\n") || ""}
-                onChange={(e) => handleSkillsChange(e.target.value)}
-                placeholder="Qurilish&#10;Ta'mirlash&#10;Elektr ishlari"
-                rows={4}
-              />
-              {formData.skills && formData.skills.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {formData.skills.map((skill, index) => (
-                    <Badge key={index} variant="secondary" className="text-xs">
-                      {skill}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Descriptions */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="description_uz">Tavsif (O'zbek)</Label>
-                <Textarea
-                  id="description_uz"
-                  value={formData.description_uz || ""}
-                  onChange={(e) => handleInputChange("description_uz", e.target.value)}
-                  placeholder="Ishchi haqida qisqacha ma'lumot..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description_ru">Tavsif (Rus)</Label>
-                <Textarea
-                  id="description_ru"
-                  value={formData.description_ru || ""}
-                  onChange={(e) => handleInputChange("description_ru", e.target.value)}
-                  placeholder="Краткая информация о работнике..."
-                  rows={3}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Documents and Portfolio */}
-          <div className="space-y-4">
+          
+{/* 
+          <div className="space-y-4"> */}
             {/* Document Information */}
-            <Card>
-              <CardHeader>
+            {/* <Card> */}
+              {/* <CardHeader>
                 <CardTitle className="text-base">Hujjat ma'lumotlari (ixtiyoriy)</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
+              </CardHeader> */}
+              {/* <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4"> */}
+                  {/* <div className="space-y-2">
                     <Label htmlFor="passport_series">Passport seriyasi</Label>
                     <Input
                       id="passport_series"
@@ -547,8 +431,8 @@ export function WorkerDialog({ worker, onSaved, onClose, open }: WorkerDialogPro
                       onChange={(e) => handleDocumentChange("passport_series", e.target.value)}
                       placeholder="AA"
                     />
-                  </div>
-                  <div className="space-y-2">
+                  </div> */}
+                  {/* <div className="space-y-2">
                     <Label htmlFor="passport_number">Passport raqami</Label>
                     <Input
                       id="passport_number"
@@ -556,10 +440,10 @@ export function WorkerDialog({ worker, onSaved, onClose, open }: WorkerDialogPro
                       onChange={(e) => handleDocumentChange("passport_number", e.target.value)}
                       placeholder="1234567"
                     />
-                  </div>
+                  </div> */}
                 </div>
 
-                <div className="space-y-2">
+                {/* <div className="space-y-2">
                   <Label htmlFor="birth_date">Tug'ilgan sana</Label>
                   <Input
                     id="birth_date"
@@ -567,13 +451,13 @@ export function WorkerDialog({ worker, onSaved, onClose, open }: WorkerDialogPro
                     value={documentData.birth_date || ""}
                     onChange={(e) => handleDocumentChange("birth_date", e.target.value)}
                   />
-                </div>
+                </div> */}
 
                 {/* Passport Image Upload */}
-                <div className="space-y-2">
-                  <Label>Passport rasmi</Label>
-                  <div>
-                    <input
+                {/* <div className="space-y-2">
+                  <Label>Passport rasmi</Label> */}
+                  {/* <div> */}
+                    {/* <input
                       type="file"
                       accept="image/*"
                       onChange={handlePassportImageUpload}
@@ -598,10 +482,10 @@ export function WorkerDialog({ worker, onSaved, onClose, open }: WorkerDialogPro
                           Passport rasmini yuklash
                         </>
                       )}
-                    </Button>
-                  </div>
+                    </Button> */}
+                  {/* </div> */}
 
-                  {documentData.passport_image_url && (
+                  {/* {documentData.passport_image_url && (
                     <div className="relative group">
                       <div className="aspect-video rounded-lg overflow-hidden border">
                         <Image
@@ -621,13 +505,13 @@ export function WorkerDialog({ worker, onSaved, onClose, open }: WorkerDialogPro
                         <X className="h-3 w-3" />
                       </Button>
                     </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                  )} */}
+                {/* </div> */}
+              {/* </CardContent>
+            </Card> */}
 
             {/* Portfolio Images */}
-            <Card>
+            {/* <Card>
               <CardHeader>
                 <CardTitle className="text-base">Portfolio rasmlari</CardTitle>
               </CardHeader>
@@ -688,9 +572,9 @@ export function WorkerDialog({ worker, onSaved, onClose, open }: WorkerDialogPro
                   </div>
                 )}
               </CardContent>
-            </Card>
-          </div>
-        </div>
+            </Card> */}
+          {/* </div>
+        </div> */}
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-2 pt-4 border-t">

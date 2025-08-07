@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { supabase } from "@/lib/supabase"
-import { Plus, Edit, Save, Loader2, Upload, Trash2 } from "lucide-react"
+import { Plus, Edit, Save, Loader2, Upload, Trash2, Router } from "lucide-react"
 import Image from "next/image"
 
 interface Ad {
@@ -89,6 +89,7 @@ export function AdDialog({ ad, onSave, trigger }: AdDialogProps) {
         ...prev,
         image_url: publicUrl,
       }))
+      
     } catch (error) {
       console.error("Error uploading image:", error)
       alert("Rasmni yuklashda xatolik yuz berdi")
@@ -106,37 +107,45 @@ export function AdDialog({ ad, onSave, trigger }: AdDialogProps) {
 
   const handleSave = async () => {
     if (!formData.name || !formData.image_url) {
-      alert("Reklama nomi va rasmini to'ldiring")
-      return
+      alert("Reklama nomi va rasmini to'ldiring");
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
     try {
       const saveData = {
         ...formData,
         updated_at: new Date().toISOString(),
-      }
+      };
+
+      let result; // Natijani saqlash uchun o'zgaruvchi
 
       if (ad?.id) {
-        // Update existing ad
-        const { error } = await supabase.from("ads").update(saveData).eq("id", ad.id)
-        if (error) throw error
+        // Mavjud reklamani yangilash
+        result = await supabase.from("ads").update(saveData).eq("id", ad.id);
       } else {
-        // Create new ad
-        saveData.created_at = new Date().toISOString()
-        const { error } = await supabase.from("ads").insert([saveData])
-        if (error) throw error
+        // Yangi reklama yaratish
+        saveData.created_at = new Date().toISOString();
+        result = await supabase.from("ads").insert([saveData]);
       }
 
-      onSave()
-      setOpen(false)
+      // Supabase chaqiruvidan qaytgan 'error' obyektini tekshirish
+      if (result.error) {
+        // Agar haqiqiy xatolik bo'lsa, uni tashla
+        throw result.error;
+      }
+
+      // Agar xatolik bo'lmasa (yoki error null bo'lsa), muvaffaqiyatli bajarildi
+      window.location.reload();
+      setOpen(false);
     } catch (error) {
-      console.error("Error saving ad:", error)
-      alert("Reklamani saqlashda xatolik yuz berdi")
+      console.error("Reklamani saqlashda xatolik yuz berdi:", error);
+      // Foydalanuvchiga aniqroq xatolik xabarini ko'rsating
+      alert(`Reklamani saqlashda xatolik yuz berdi: ${error.message || error}`);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+};
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -219,12 +228,12 @@ export function AdDialog({ ad, onSave, trigger }: AdDialogProps) {
 
             {formData.image_url ? (
               <div className="relative">
-                <div className="aspect-[16/9] rounded-lg overflow-hidden border bg-muted">
+                <div className="aspect-[5/1] rounded-lg overflow-hidden border bg-muted">
                   <Image
                     src={formData.image_url || "/placeholder.svg"}
                     alt={formData.name}
-                    width={600}
-                    height={338}
+                    width={90}
+                    height={30}
                     className="object-cover w-full h-full"
                   />
                 </div>
@@ -258,26 +267,7 @@ export function AdDialog({ ad, onSave, trigger }: AdDialogProps) {
           </div>
 
           {/* Preview */}
-          {formData.image_url && formData.name && (
-            <div className="space-y-2">
-              <Label>Ko'rinish</Label>
-              <div className="p-4 border rounded-lg bg-muted/30">
-                <div className="aspect-[16/9] rounded overflow-hidden">
-                  <Image
-                    src={formData.image_url || "/placeholder.svg"}
-                    alt={formData.name}
-                    width={400}
-                    height={225}
-                    className="object-cover w-full h-full"
-                  />
-                </div>
-                <div className="mt-2 text-center">
-                  <p className="font-medium">{formData.name}</p>
-                  {formData.link && <p className="text-sm text-muted-foreground truncate">{formData.link}</p>}
-                </div>
-              </div>
-            </div>
-          )}
+          
         </div>
 
         {/* Action Buttons */}

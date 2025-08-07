@@ -111,12 +111,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         icon: ShoppingCart,
         badge: pendingOrdersCount > 0 ? pendingOrdersCount : null,
       },
-      {
-        title: "Arendalar",
-        url: "/rentals",
-        icon: Calendar,
-        badge: rentalsCount > 0 ? rentalsCount : null,
-      },
+      
       {
         title: "Qarzdorlar",
         url: "/debtors",

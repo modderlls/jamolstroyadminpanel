@@ -310,9 +310,9 @@ export default function AdsPage() {
 
       {/* Main Content */}
       <Tabs defaultValue="grid" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsList className="grid w-full grid-cols-1 max-w-md">
           <TabsTrigger value="grid">Kartalar</TabsTrigger>
-          <TabsTrigger value="table">Jadval</TabsTrigger>
+           
         </TabsList>
 
         <TabsContent value="grid" className="space-y-6">

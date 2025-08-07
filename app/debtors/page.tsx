@@ -225,7 +225,7 @@ export default function DebtorsPage() {
           <TabsList className="grid w-full max-w-md grid-cols-3">
             <TabsTrigger value="current">Joriy qarzdorlar</TabsTrigger>
             <TabsTrigger value="previous">Oldingi qarzdorlar</TabsTrigger>
-            <TabsTrigger value="table">Jadval</TabsTrigger>
+             
           </TabsList>
         </div>
 

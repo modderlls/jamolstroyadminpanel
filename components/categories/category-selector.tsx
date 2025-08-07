@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Plus, ChevronRight } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Plus, ChevronRight, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 interface Category {
@@ -16,25 +16,27 @@ interface Category {
   parent_id: string | null
   level: number
   path: string
+  is_active: boolean
 }
 
 interface CategorySelectorProps {
-  value: string
-  onChange: (value: string) => void
+  value: string | null // value null bo'lishi mumkinligini ko'rsatamiz
+  onChange: (value: string | null) => void // onChange ham null qabul qilishini ko'rsatamiz
   categories: Category[]
-  onCategoriesUpdate: () => void
+  onCategoriesUpdate: () => void // Bu prop funksiya ekanligini belgilaymiz
 }
 
 export function CategorySelector({ value, onChange, categories, onCategoriesUpdate }: CategorySelectorProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedParent, setSelectedParent] = useState<string>("")
+  const [selectedParent, setSelectedParent] = useState<string>("none") // Dastlabki qiymat "none"
   const [newCategoryName, setNewCategoryName] = useState("")
   const [newCategoryNameRu, setNewCategoryNameRu] = useState("")
   const [loading, setLoading] = useState(false)
 
   // Hierarchical categories ni tuzish
   const buildCategoryTree = (cats: Category[], parentId: string | null = null): Category[] => {
-    return cats.filter((cat) => cat.parent_id === parentId).sort((a, b) => a.name_uz.localeCompare(b.name_uz))
+    // Faqat is_active = true bo'lgan kategoriyalarni ko'rsatish uchun filtr
+    return cats.filter((cat) => cat.parent_id === parentId && cat.is_active).sort((a, b) => a.name_uz.localeCompare(b.name_uz))
   }
 
   const renderCategoryOption = (category: Category, level = 0) => {
@@ -60,19 +62,28 @@ export function CategorySelector({ value, onChange, categories, onCategoriesUpda
 
     setLoading(true)
     try {
-      // Parse category name for sub-categories (using / separator)
       const categoryParts = newCategoryName
         .split("/")
         .map((part) => part.trim())
         .filter(Boolean)
-      let currentParentId = selectedParent || null
+      
+      // selectedParent ni to'g'ri null ga aylantiramiz
+      let currentParentId: string | null = selectedParent === "none" ? null : selectedParent 
+
+      // onCategoriesUpdate() ni chaqirishdan oldin category ma'lumotlarini mahalliy yangilash
+      // Bu `existingCategory` tekshiruvini ancha aniqroq qiladi
+      // Qayd: Bu yechim yangi kategoriya yaratilganda `categories` propining bir zumda yangilanishini ta'minlaydi.
+      // Lekin `onCategoriesUpdate` hali ham kerak, chunki u `CategorySelector` dan tashqaridagi global state'ni yangilaydi.
+      let currentCategories = [...categories]; 
 
       for (let i = 0; i < categoryParts.length; i++) {
-        const categoryName = categoryParts[i]
+        const categoryNameUz = categoryParts[i]
+        // Faqat oxirgi qism uchun ruscha nomni qo'llash
+        const categoryNameRu = i === categoryParts.length - 1 ? (newCategoryNameRu.trim() || categoryNameUz) : categoryNameUz; 
 
-        // Check if category already exists at this level
-        const existingCategory = categories.find(
-          (cat) => cat.name_uz.toLowerCase() === categoryName.toLowerCase() && cat.parent_id === currentParentId,
+        // Check if category already exists at this level using the most recent categories list
+        const existingCategory = currentCategories.find(
+          (cat) => cat.name_uz.toLowerCase() === categoryNameUz.toLowerCase() && cat.parent_id === currentParentId && cat.is_active,
         )
 
         if (existingCategory) {
@@ -85,9 +96,10 @@ export function CategorySelector({ value, onChange, categories, onCategoriesUpda
           .from("categories")
           .insert([
             {
-              name_uz: categoryName,
-              name_ru: newCategoryNameRu || categoryName,
+              name_uz: categoryNameUz,
+              name_ru: categoryNameRu,
               parent_id: currentParentId,
+              is_active: true, // is_active ustunini to'g'ridan-to'g'ri belgilash
             },
           ])
           .select()
@@ -96,6 +108,7 @@ export function CategorySelector({ value, onChange, categories, onCategoriesUpda
         if (error) throw error
 
         currentParentId = data.id
+        currentCategories.push(data as Category); // Yangi yaratilgan kategoriyani mahalliy ro'yxatga qo'shamiz
 
         // If this is the last category, select it
         if (i === categoryParts.length - 1) {
@@ -103,14 +116,22 @@ export function CategorySelector({ value, onChange, categories, onCategoriesUpda
         }
       }
 
-      await onCategoriesUpdate()
+      // onCategoriesUpdate funksiyasining mavjudligini tekshiramiz
+      if (typeof onCategoriesUpdate === 'function') {
+        await onCategoriesUpdate(); // Asosiy kategoriyalar ro'yxatini to'liq yangilash
+      } else {
+        console.warn("onCategoriesUpdate prop is not a function or is missing.");
+        // Agar onCategoriesUpdate funksiya bo'lmasa, ogohlantirish beramiz
+        // Lekin xatoni appni to'xtatmaymiz, chunki kategoriya yaratildi
+      }
+      
       setIsDialogOpen(false)
       setNewCategoryName("")
       setNewCategoryNameRu("")
-      setSelectedParent("")
-    } catch (error) {
+      setSelectedParent("none") // Dialogni yopgandan keyin "none" ga qaytaramiz
+    } catch (error: any) {
       console.error("Error creating category:", error)
-      alert("Kategoriya yaratishda xatolik yuz berdi")
+      alert("Kategoriya yaratishda xatolik yuz berdi: " + error.message) // Xato xabarini ko'rsatish
     } finally {
       setLoading(false)
     }
@@ -122,24 +143,21 @@ export function CategorySelector({ value, onChange, categories, onCategoriesUpda
     <div className="space-y-2">
       <Label>Kategoriya</Label>
       <div className="flex gap-2">
-        <Select value={value} onValueChange={onChange}>
+        <Select
+          value={value === null ? "unselected" : value} // Agar `value` null bo'lsa, "unselected" ni tanlaymiz
+          onValueChange={(newValue) => onChange(newValue === "unselected" ? null : newValue)} // "unselected" bo'lsa null ga qaytaramiz
+        >
           <SelectTrigger className="flex-1">
             <SelectValue placeholder="Kategoriyani tanlang" />
           </SelectTrigger>
           <SelectContent className="max-h-[300px]">
+            {/* Mana bu yerda xatoni tuzatdik: value="unselected" */}
+            <SelectItem value="unselected">Kategoriya tanlanmagan</SelectItem>
             {rootCategories.flatMap((category) => renderCategoryOption(category))}
           </SelectContent>
         </Select>
 
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          onClick={() => setIsDialogOpen(true)}
-          className="ios-button"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
+        
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -159,7 +177,8 @@ export function CategorySelector({ value, onChange, categories, onCategoriesUpda
                   <SelectValue placeholder="Ota kategoriyani tanlang" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Asosiy kategoriya</SelectItem>
+                  {/* "none" qiymatini saqlab qolamiz, chunki bu Select componentining ichki value'si */}
+                  <SelectItem value="none">Asosiy kategoriya</SelectItem> 
                   {rootCategories.flatMap((category) => renderCategoryOption(category))}
                 </SelectContent>
               </Select>
@@ -184,14 +203,21 @@ export function CategorySelector({ value, onChange, categories, onCategoriesUpda
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={loading}>
                 Bekor qilish
               </Button>
               <Button type="button" onClick={handleCreateCategory} disabled={loading || !newCategoryName.trim()}>
-                {loading ? "Yaratilmoqda..." : "Yaratish"}
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Yaratilmoqda...
+                  </>
+                ) : (
+                  "Yaratish"
+                )}
               </Button>
-            </div>
+            </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>

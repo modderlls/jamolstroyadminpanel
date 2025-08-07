@@ -52,7 +52,7 @@ interface ProductDialogProps {
   product: Product | null
   categories: Category[]
   onSuccess: () => void
-  onCategoriesUpdate?: () => void
+  onCategoriesUpdate?: () => void // <<<<< ProductDialogProps: Bu prop ixtiyoriy bo'lishi mumkin
 }
 
 interface SpecificationItem {
@@ -568,11 +568,11 @@ export function ProductDialog({
                 </div>
 
                 <CategorySelector
-                  value={formData.category_id}
-                  onChange={(value) => setFormData((prev) => ({ ...prev, category_id: value }))}
-                  categories={categories}
-                  onCategoriesUpdate={onCategoriesUpdate}
-                />
+    value={formData.category_id}
+    onChange={(value) => setFormData((prev) => ({ ...prev, category_id: value }))}
+    categories={categories}
+    onCategoriesUpdate={onCategoriesUpdate} // <<<<< onCategoriesUpdate propini CategorySelectorga uzatamiz
+  />
               </CardContent>
             </Card>
 
@@ -701,17 +701,7 @@ export function ProductDialog({
                     <Label htmlFor="has_delivery">Yetkazib berish mavjud</Label>
                   </div>
 
-                  {formData.has_delivery && (
-                    <div className="space-y-2">
-                      <Label htmlFor="delivery_price">Yetkazib berish narxi (so'm)</Label>
-                      <Input
-                        id="delivery_price"
-                        type="number"
-                        value={formData.delivery_price}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, delivery_price: Number(e.target.value) }))}
-                      />
-                    </div>
-                  )}
+                  
                 </div>
               </CardContent>
             </Card>

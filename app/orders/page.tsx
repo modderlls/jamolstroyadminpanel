@@ -350,7 +350,7 @@ export default function OrdersPage() {
         <div className="flex justify-center">
           <TabsList className="grid w-full max-w-md grid-cols-3">
             <TabsTrigger value="list">Ro'yxat</TabsTrigger>
-            <TabsTrigger value="table">Jadval</TabsTrigger>
+             
             <TabsTrigger value="analytics">Tahlil</TabsTrigger>
           </TabsList>
         </div>
@@ -686,7 +686,7 @@ export default function OrdersPage() {
         </TabsContent>
 
         <TabsContent value="analytics">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <Card className="ios-card">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
@@ -715,19 +715,7 @@ export default function OrdersPage() {
               </CardContent>
             </Card>
 
-            <Card className="ios-card">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Yetkazilgan</p>
-                    <p className="text-2xl font-bold text-foreground">{analytics.deliveredOrders}</p>
-                  </div>
-                  <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
-                    <Check className="h-6 w-6 text-white" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+           
 
             <Card className="ios-card">
               <CardContent className="p-6">

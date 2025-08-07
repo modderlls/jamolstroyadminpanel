@@ -159,7 +159,7 @@ export default function WorkersPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="ios-card">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -184,17 +184,7 @@ export default function WorkersPage() {
           </CardContent>
         </Card>
 
-        <Card className="ios-card">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">O'rtacha reyting</p>
-                <p className="text-2xl font-bold text-yellow-600">{averageRating.toFixed(1)}</p>
-              </div>
-              <Star className="h-8 w-8 text-yellow-600" />
-            </div>
-          </CardContent>
-        </Card>
+        
 
         <Card className="ios-card">
           <CardContent className="p-6">
@@ -294,20 +284,9 @@ export default function WorkersPage() {
                       <span>{worker.phone_number}</span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      <span>{worker.experience_years} yil tajriba</span>
-                    </div>
+                    
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                        <span className="text-sm font-medium">{worker.rating}</span>
-                      </div>
-                      <div className="text-sm font-medium text-primary">
-                        {worker.hourly_rate.toLocaleString()} so'm/soat
-                      </div>
-                    </div>
+                    
 
                     <div className="flex gap-2 pt-2">
                       <Button

@@ -331,7 +331,7 @@ export default function RentalsPage() {
 
       {/* Main Content */}
       <Tabs defaultValue="current" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsList className="grid w-full grid-cols- max-w-md">
           <TabsTrigger value="current">Joriy arenda</TabsTrigger>
           <TabsTrigger value="returned">Qaytarilgan</TabsTrigger>
         </TabsList>

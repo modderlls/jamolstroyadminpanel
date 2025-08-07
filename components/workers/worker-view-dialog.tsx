@@ -102,14 +102,13 @@ export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
         </DialogHeader>
 
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="general">Umumiy</TabsTrigger>
             <TabsTrigger value="documents">Hujjatlar</TabsTrigger>
-            <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
               {/* Basic Information */}
               <Card>
                 <CardHeader>
@@ -171,65 +170,14 @@ export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
               </Card>
 
               {/* Professional Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Briefcase className="h-4 w-4" />
-                    Professional ma'lumotlar
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      Tajriba:
-                    </span>
-                    <span className="font-medium">{worker.experience_years} yil</span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center gap-1">
-                      <Star className="h-3 w-3" />
-                      Reyting:
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                      <span className="font-medium">{worker.rating}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" />
-                      Soatlik narx:
-                    </span>
-                    <span className="font-medium text-primary">{worker.hourly_rate.toLocaleString()} so'm</span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" />
-                      Kunlik narx:
-                    </span>
-                    <span className="font-medium text-primary">{worker.daily_rate.toLocaleString()} so'm</span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      Qo'shilgan:
-                    </span>
-                    <span className="font-medium">{formatDate(worker.created_at)}</span>
-                  </div>
-                </CardContent>
-              </Card>
+              
             </div>
 
             {/* Skills */}
             {worker.skills && worker.skills.length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Ko'nikmalar</CardTitle>
+                  <CardTitle className="text-base">Ko'nikma</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
@@ -351,35 +299,6 @@ export function WorkerViewDialog({ worker, onClose }: WorkerViewDialogProps) {
             )}
           </TabsContent>
 
-          <TabsContent value="portfolio" className="space-y-6">
-            {worker.portfolio_images && worker.portfolio_images.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {worker.portfolio_images.map((image, index) => (
-                  <Card key={index}>
-                    <CardContent className="p-4">
-                      <div className="aspect-square rounded-lg overflow-hidden border">
-                        <Image
-                          src={image || "/placeholder.svg"}
-                          alt={`Portfolio ${index + 1}`}
-                          width={300}
-                          height={300}
-                          className="object-cover w-full h-full"
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <ImageIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <h3 className="text-lg font-semibold mb-2">Portfolio rasmlari topilmadi</h3>
-                  <p className="text-muted-foreground">Bu ishchi uchun portfolio rasmlari yuklanmagan</p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
         </Tabs>
 
         <div className="flex justify-end pt-4 border-t">

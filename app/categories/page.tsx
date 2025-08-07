@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog" // DialogFooter qo'shildi
+import { Checkbox } from "@/components/ui/checkbox" // Checkbox komponenti qo'shildi
 import {
   FolderTree,
   Plus,
@@ -32,6 +33,7 @@ interface Category {
   path: string
   created_at: string
   updated_at: string
+  is_active: boolean // is_active ustuni qo'shildi
   children?: Category[]
   products_count?: number
 }
@@ -52,6 +54,12 @@ export default function CategoriesPage() {
   const [newCategoryNameRu, setNewCategoryNameRu] = useState("")
   const [dialogLoading, setDialogLoading] = useState(false)
 
+  // DELETE Dialog states
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null)
+  const [deleteProductsToo, setDeleteProductsToo] = useState(false) // Mahsulotlarni ham o'chirish checkbox holati
+  const [deleteDialogLoading, setDeleteDialogLoading] = useState(false) // Delete dialog uchun loading
+
   useEffect(() => {
     fetchCategories()
   }, [])
@@ -60,13 +68,14 @@ export default function CategoriesPage() {
     try {
       setLoading(true)
 
-      // Fetch categories with product counts
+      // Fetch categories with product counts and filter by is_active = true
       const { data: categoriesData, error } = await supabase
         .from("categories")
         .select(`
           *,
           products(count)
         `)
+        .eq("is_active", true) // Faqat faol kategoriyalarni olib kelish
         .order("name_uz")
 
       if (error) throw error
@@ -75,7 +84,7 @@ export default function CategoriesPage() {
       const processedCategories = (categoriesData || []).map((cat) => ({
         ...cat,
         products_count: cat.products?.[0]?.count || 0,
-      }))
+      })) as Category[] // Type assertion for clarity
 
       setCategories(processedCategories)
     } catch (error) {
@@ -107,6 +116,7 @@ export default function CategoriesPage() {
             name_uz: newCategoryName.trim(),
             name_ru: newCategoryNameRu.trim() || newCategoryName.trim(),
             parent_id: selectedParent || null,
+            is_active: true, // Yangi kategoriya sukut bo'yicha faol bo'lsin
           },
         ])
         .select()
@@ -158,23 +168,47 @@ export default function CategoriesPage() {
     }
   }
 
-  const handleDeleteCategory = async (category: Category) => {
-    if (!confirm(`"${category.name_uz}" kategoriyasini o'chirishni tasdiqlaysizmi?`)) {
-      return
-    }
+  // handleDeleteCategory endi faqat dialog ochadi
+  const handleDeleteCategory = (category: Category) => {
+    setDeletingCategory(category)
+    setDeleteProductsToo(false) // Har safar yangidan boshlash
+    setIsDeleteDialogOpen(true)
+  }
 
+  // Yangi funksiya: o'chirishni tasdiqlash va bajarish
+  const confirmDeleteCategory = async () => {
+    if (!deletingCategory) return
+
+    setDeleteDialogLoading(true)
     try {
-      const { error } = await supabase
-      .from("categories")
-      .update({ is_active: false }) // is_active ustunini false qilyapmiz
-      .eq("id", category.id)
+      // Kategoriyani is_active = false qilish
+      const { error: categoryUpdateError } = await supabase
+        .from("categories")
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq("id", deletingCategory.id)
 
-      if (error) throw error
+      if (categoryUpdateError) throw categoryUpdateError
 
-      await fetchCategories()
+      // Agar mahsulotlari ham o'chirilishi kerak bo'lsa
+      if (deleteProductsToo) {
+        const { error: productsUpdateError } = await supabase
+          .from("products") // Mahsulotlar jadvali nomi
+          .update({ is_available: false})
+          .eq("category_id", deletingCategory.id) // Kategoriya ID'si bo'yicha bog'langan mahsulotlarni topish
+
+        if (productsUpdateError) throw productsUpdateError
+      }
+
+      await fetchCategories() // Ro'yxatni yangilash
+      setIsDeleteDialogOpen(false) // Dialogni yopish
+      setDeletingCategory(null)
+      setDeleteProductsToo(false)
+      alert(`"${deletingCategory.name_uz}" kategoriyasi muvaffaqiyatli arxivlandi.`);
     } catch (error) {
-      console.error("Error deleting category:", error)
-      alert("Kategoriyani o'chirishda xatolik yuz berdi")
+      console.error("Error archiving category:", error)
+      alert("Kategoriyani arxivlashda xatolik yuz berdi")
+    } finally {
+      setDeleteDialogLoading(false)
     }
   }
 
@@ -233,7 +267,7 @@ export default function CategoriesPage() {
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium">{category.name_uz}</span>
-                {category.products_count > 0 && (
+                {category.products_count !== undefined && category.products_count > 0 && ( // products_count ni tekshirish
                   <Badge variant="secondary" className="text-xs">
                     {category.products_count}
                   </Badge>
@@ -254,7 +288,7 @@ export default function CategoriesPage() {
               variant="ghost"
               size="sm"
               className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-              onClick={() => handleDeleteCategory(category)}
+              onClick={() => handleDeleteCategory(category)} // Yangi handleDeleteCategory ni chaqiramiz
             >
               <Trash2 className="h-3 w-3" />
             </Button>
@@ -306,7 +340,7 @@ export default function CategoriesPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="tree">Daraxt ko'rinishi</TabsTrigger>
-          <TabsTrigger value="table">Jadval</TabsTrigger>
+           
         </TabsList>
 
         <TabsContent value="tree">
@@ -411,7 +445,7 @@ export default function CategoriesPage() {
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
@@ -430,7 +464,7 @@ export default function CategoriesPage() {
                   "Yaratish"
                 )}
               </Button>
-            </div>
+            </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>
@@ -480,7 +514,7 @@ export default function CategoriesPage() {
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
@@ -499,8 +533,61 @@ export default function CategoriesPage() {
                   "Yangilash"
                 )}
               </Button>
-            </div>
+            </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DELETE Category Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Kategoriyani o'chirish</DialogTitle>
+            <DialogDescription>
+              Siz `"{deletingCategory?.name_uz}"` kategoriyasini arxivlamoqchisiz.
+              Ushbu kategoriya endi ko'rinmaydi.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="deleteProducts"
+              checked={deleteProductsToo}
+              onCheckedChange={(checked) => setDeleteProductsToo(Boolean(checked))}
+            />
+            <label
+              htmlFor="deleteProducts"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Ushbu kategoriya bilan bog'liq mahsulotlarni ham o'chirish (arxivlash)
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              disabled={deleteDialogLoading}
+            >
+              Bekor qilish
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={confirmDeleteCategory}
+              disabled={deleteDialogLoading}
+            >
+              {deleteDialogLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  O'chirilmoqda...
+                </>
+              ) : (
+                "Arxivlash"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
