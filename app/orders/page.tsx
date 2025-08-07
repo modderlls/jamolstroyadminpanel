@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,12 +25,18 @@ import {
   Truck,
   CreditCard,
   Clock,
+  DollarSign,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+// ModderSheetga teginmaymiz, lekin uni hali ham import qilamiz, agar u alohida yo'l bilan ishlatilsa
 import { ModderSheet } from "@/components/moddersheet/modder-sheet"
 import { OrderViewDialog } from "@/components/orders/order-view-dialog"
 import { PaymentConfirmDialog } from "@/components/orders/payment-confirm-dialog"
+import { ManualPriceInputDialog } from "@/components/orders/manual-price-input-dialog" // NEW import for the dialog
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
+import { format } from "date-fns"
+import { uz } from "date-fns/locale"
 
 interface Order {
   id: string
@@ -51,6 +57,7 @@ interface Order {
   borrowed_period: number
   borrowed_additional_period: number
   borrowed_updated_at: string
+  delivery_with_service: boolean
   customers: {
     first_name: string
     last_name: string
@@ -64,8 +71,9 @@ interface Order {
     products: {
       name_uz: string
       images: string[]
-      specifications?: any // Changed type to any as it can be object or string
+      specifications?: any
     }
+    variations?: any // Assuming variations are on order_items
   }>
 }
 
@@ -97,6 +105,7 @@ export default function OrdersPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
+  const [newOrderIds, setNewOrderIds] = useState<string[]>([])
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("")
@@ -109,14 +118,24 @@ export default function OrdersPage() {
   const [paymentOrder, setPaymentOrder] = useState<Order | null>(null)
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
 
+  // Manual Price Input Dialog states - for handling 'Qabul qilish' with unpriced manual variations
+  const [isManualPriceInputDialogOpen, setIsManualPriceInputDialogOpen] = useState(false);
+  const [orderToAcceptWithManualPrice, setOrderToAcceptWithManualPrice] = useState<Order | null>(null);
+
+  // ModderSheet usage - These states are NOT used to open ModderSheet as a popup from this page's 'Edit' button
+  // They are kept here only if ModderSheet has other generic uses within your OrdersPage (e.g., a dedicated "Table View" tab)
+  const [modderSheetOrder, setModderSheetOrder] = useState<Order | null>(null);
+  const [isModderSheetOpen, setIsModderSheetOpen] = useState(false);
+
+
+  const newOrderSoundRef = useRef<HTMLAudioElement | null>(null);
+  const updatedOrderSoundRef = useRef<HTMLAudioElement | null>(null);
+
   const router = useRouter()
 
-  useEffect(() => {
-    fetchOrders()
-  }, [currentPage, searchQuery, statusFilter, paymentFilter, dateFilter])
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
+      setLoading(true);
       let query = supabase.from("orders").select(
         `
           *,
@@ -126,13 +145,13 @@ export default function OrdersPage() {
             quantity,
             unit_price,
             total_price,
-            products(name_uz, images, specifications)
+            products(name_uz, images, specifications),
+            variations
           )
         `,
         { count: "exact" },
       )
 
-      // Apply filters
       if (searchQuery) {
         query = query.or(
           `order_number.ilike.%${searchQuery}%,customer_name.ilike.%${searchQuery}%,customer_phone.ilike.%${searchQuery}%`,
@@ -166,7 +185,6 @@ export default function OrdersPage() {
         query = query.gte("created_at", startDate.toISOString())
       }
 
-      // Pagination
       const from = (currentPage - 1) * ITEMS_PER_PAGE
       const to = from + ITEMS_PER_PAGE - 1
 
@@ -174,18 +192,160 @@ export default function OrdersPage() {
 
       if (error) throw error
 
-      setOrders(data || [])
+      const fetchedOrders: Order[] = (data || []).map(order => ({
+        ...order,
+        order_items: order.order_items || []
+      }));
+
+      setOrders(fetchedOrders)
       setTotalCount(count || 0)
       setTotalPages(Math.ceil((count || 0) / ITEMS_PER_PAGE))
     } catch (error) {
       console.error("Error fetching orders:", error)
+      toast.error("Buyurtmalarni yuklashda xatolik yuz berdi.")
     } finally {
       setLoading(false)
     }
-  }
+  }, [currentPage, searchQuery, statusFilter, paymentFilter, dateFilter]);
+
+
+  useEffect(() => {
+    // Initialize audio elements only once
+    if (!newOrderSoundRef.current) {
+      newOrderSoundRef.current = new Audio('/sounds/new-order.mp3');
+      newOrderSoundRef.current.load(); // Preload for faster playback
+    }
+    if (!updatedOrderSoundRef.current) {
+      updatedOrderSoundRef.current = new Audio('/sounds/update-order.mp3');
+      updatedOrderSoundRef.current.load(); // Preload
+    }
+
+    // Initial fetch
+    fetchOrders();
+
+    // Supabase Realtime Subscription
+    // Supabase Realtime clients usually manage reconnection attempts automatically.
+    // If you experience frequent disconnects, ensure your Supabase project's Realtime
+    // settings are configured correctly (e.g., enable for 'orders' table)
+    // and check your browser's console for WebSocket errors or network issues.
+    const channel = supabase
+      .channel("orders_realtime_channel") // Use a unique channel name to avoid conflicts
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // Listen for all changes (INSERT, UPDATE, DELETE)
+          schema: "public",
+          table: "orders",
+        },
+        async (payload) => {
+          console.log("Realtime change received!", payload);
+
+          // Attempt to play sound, handling potential autoplay restrictions
+          const playSound = (audioRef: React.MutableRefObject<HTMLAudioElement | null>) => {
+            audioRef.current?.play().catch(e => {
+              if (e.name === 'NotAllowedError') {
+                console.warn("Autoplay was prevented. User must interact with the document first for sound to play: https://goo.gl/xX8pDD");
+              } else {
+                console.error("Error playing sound:", e);
+              }
+            });
+          };
+
+          // Function to fetch full order data, including nested `order_items` and `customers`
+          const fetchAndProcessOrder = async (id: string) => {
+            const { data: fullOrderData, error } = await supabase.from("orders").select(`
+              *,
+              customers:customer_id(first_name, last_name, phone_number),
+              order_items(
+                id,
+                quantity,
+                unit_price,
+                total_price,
+                products(name_uz, images, specifications),
+                variations
+              )
+            `).eq("id", id).single();
+
+            if (error) {
+              console.error("Error fetching full order details during realtime update:", error);
+              return null;
+            }
+            // Ensure order_items is always an array, even if null from DB
+            return { ...fullOrderData, order_items: fullOrderData.order_items || [] } as Order;
+          };
+
+
+          if (payload.eventType === "INSERT") {
+            const newOrder = await fetchAndProcessOrder(payload.new.id);
+            if (newOrder) {
+              setOrders((prevOrders) => [newOrder, ...prevOrders]);
+              setNewOrderIds((prevIds) => [...prevIds, newOrder.id]);
+              toast.info(`Yangi buyurtma qo'shildi: #${newOrder.order_number}`);
+              setTotalCount((prevCount) => prevCount + 1);
+              playSound(newOrderSoundRef);
+            }
+          } else if (payload.eventType === "UPDATE") {
+            const updatedOrder = await fetchAndProcessOrder(payload.new.id);
+            if (updatedOrder) {
+              setOrders((prevOrders) =>
+                prevOrders.map((order) =>
+                  order.id === updatedOrder.id ? updatedOrder : order
+                )
+              );
+              toast.info(`Buyurtma yangilandi: #${updatedOrder.order_number}`);
+              playSound(updatedOrderSoundRef);
+            }
+          } else if (payload.eventType === "DELETE") {
+            const deletedOrderId = payload.old?.id;
+            if (deletedOrderId) {
+              setOrders((prevOrders) =>
+                prevOrders.filter((order) => order.id !== deletedOrderId)
+              );
+              setTotalCount((prevCount) => prevCount - 1);
+              toast.info(`Buyurtma o'chirildi: #${payload.old?.order_number || ''}`);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup function: Unsubscribe from the channel when the component unmounts
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchOrders]); // `fetchOrders` is a dependency here because we want to trigger it on mount
+
 
   const handleAcceptOrder = async (orderId: string) => {
     try {
+      const orderToAccept = orders.find(order => order.id === orderId);
+      if (orderToAccept) {
+        // Check for manual variations with unassigned additional_price (0, null, or undefined)
+        const requiresPriceInput = (orderToAccept.order_items || []).some(item => {
+          if (item.variations) {
+            let variations;
+            try {
+              variations = typeof item.variations === 'string' ? JSON.parse(item.variations) : item.variations;
+            } catch (e) {
+              console.error("Error parsing variations for price check:", e);
+              return false;
+            }
+            return Array.isArray(variations) && variations.some(
+              (variation: any) => variation.manual_type === true && (variation.additional_price === 0 || variation.additional_price === null || typeof variation.additional_price === 'undefined')
+            );
+          }
+          return false;
+        });
+
+        if (requiresPriceInput) {
+          // Open the manual price input dialog if manual prices are needed
+          setOrderToAcceptWithManualPrice(orderToAccept);
+          setIsManualPriceInputDialogOpen(true);
+          return; // Stop the acceptance process here, it will resume after dialog submission
+        }
+      }
+
+      // If no manual price input is required, proceed directly with acceptance
       const { error } = await supabase
         .from("orders")
         .update({
@@ -194,12 +354,14 @@ export default function OrdersPage() {
           updated_at: new Date().toISOString(),
         })
         .eq("id", orderId)
+        .select(); // Select the updated row to get the latest data
 
       if (error) throw error
-      await fetchOrders()
+      toast.success("Buyurtma qabul qilindi!")
+      // Realtime listener will handle UI update
     } catch (error) {
       console.error("Error accepting order:", error)
-      alert("Buyurtmani qabul qilishda xatolik yuz berdi")
+      toast.error("Buyurtmani qabul qilishda xatolik yuz berdi")
     }
   }
 
@@ -213,12 +375,14 @@ export default function OrdersPage() {
             updated_at: new Date().toISOString(),
           })
           .eq("id", orderId)
+          .select(); // Select the updated row to get the latest data
 
         if (error) throw error
-        await fetchOrders()
+        toast.success("Buyurtma rad etildi.")
+        // Realtime listener will update the UI
       } catch (error) {
         console.error("Error rejecting order:", error)
-        alert("Buyurtmani rad etishda xatolik yuz berdi")
+        toast.error("Buyurtmani rad etishda xatolik yuz berdi")
       }
     }
   }
@@ -237,6 +401,11 @@ export default function OrdersPage() {
     setIsViewDialogOpen(true)
   }
 
+  // HandleEditOrder will now navigate to a separate page, not open ModderSheet as a dialog
+  const handleEditOrder = (order: Order) => {
+    router.push(`/orders/edit/${order.id}`); // Navigate to a dynamic edit route
+  };
+
   const clearFilters = () => {
     setStatusFilter("")
     setPaymentFilter("")
@@ -245,11 +414,9 @@ export default function OrdersPage() {
     setCurrentPage(1)
   }
 
-  // Calculate analytics based on current filtered data
   const getAnalyticsData = () => {
     let analyticsOrders = orders
 
-    // Apply same filters as main list for analytics
     if (statusFilter || paymentFilter || dateFilter || searchQuery) {
       analyticsOrders = orders.filter((order) => {
         let matches = true
@@ -263,18 +430,17 @@ export default function OrdersPage() {
             matches &&
             (order.order_number.toLowerCase().includes(searchLower) ||
               order.customer_name.toLowerCase().includes(searchLower) ||
-              order.customer_phone.includes(searchQuery))
+              order.customer_phone.includes(searchLower))
         }
 
         return matches
       })
     }
 
-    // Exclude cancelled orders from total sum calculation
     const validOrders = analyticsOrders.filter((order) => order.status !== "cancelled")
 
     return {
-      totalOrders: analyticsOrders.length,
+      totalOrders: validOrders.length,
       pendingOrders: analyticsOrders.filter((o) => o.status === "pending").length,
       deliveredOrders: analyticsOrders.filter((o) => o.status === "delivered").length,
       totalAmount: validOrders.reduce((sum, order) => sum + order.total_amount, 0),
@@ -285,7 +451,6 @@ export default function OrdersPage() {
     if (!specificationsData) return null;
 
     let specifications;
-    // Attempt to parse if it's a string, otherwise assume it's already an object
     if (typeof specificationsData === 'string') {
       try {
         specifications = JSON.parse(specificationsData);
@@ -297,23 +462,44 @@ export default function OrdersPage() {
       specifications = specificationsData;
     }
 
-    // Check if specifications is an object (like {"Rang": [...]})
     if (typeof specifications === 'object' && !Array.isArray(specifications)) {
       const specEntries = Object.entries(specifications);
       if (specEntries.length > 0) {
-        // Assuming the first key-value pair is what we need for display
         const [type, values] = specEntries[0];
         if (Array.isArray(values) && values.length > 0 && values[0].name) {
           return `${type}: ${values[0].name}`;
         }
       }
-    }
-    // If it's directly an array of objects like [{"type":"O'lchami","name":"12 lik","value":"12","price":null}]
-    else if (Array.isArray(specifications) && specifications.length > 0) {
+    } else if (Array.isArray(specifications) && specifications.length > 0) {
       const spec = specifications[0];
       if (spec.type && spec.name) {
         return `${spec.type}: ${spec.name}`;
       }
+    }
+
+    return null;
+  };
+
+  const getProductVariations = (variationsData?: any) => {
+    if (!variationsData) return null;
+
+    let variations;
+    try {
+      variations = typeof variationsData === 'string' ? JSON.parse(variationsData) : variationsData;
+    } catch (error) {
+      console.error("Error parsing variations string:", variationsData, error);
+      return null;
+    }
+
+    if (Array.isArray(variations) && variations.length > 0) {
+      return variations.map((variation: any) => {
+        if (variation.manual_type) {
+          // Display "narx belgilanmagan" if additional_price is 0, null, or undefined
+          return `${variation.type}: ${variation.name} (Mijoz kiritgan${variation.additional_price === 0 || variation.additional_price === null || typeof variation.additional_price === 'undefined' ? ", narx belgilanmagan" : ""})`;
+        } else {
+          return `${variation.type}: ${variation.name}`;
+        }
+      }).join(", ");
     }
 
     return null;
@@ -348,9 +534,8 @@ export default function OrdersPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex justify-center">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="list">Ro'yxat</TabsTrigger>
-             
             <TabsTrigger value="analytics">Tahlil</TabsTrigger>
           </TabsList>
         </div>
@@ -443,23 +628,23 @@ export default function OrdersPage() {
             {/* Orders List */}
             <div className="space-y-4">
               {orders.map((order) => (
-                <Card key={order.id} className="ios-card hover:shadow-md transition-all duration-300">
+                <Card
+                  key={order.id}
+                  className={`ios-card hover:shadow-md transition-all duration-300 ${
+                    newOrderIds.includes(order.id) ? "border-red-500 ring-2 ring-red-300" : ""
+                  }`}
+                  onAnimationEnd={() => setNewOrderIds((prev) => prev.filter((id) => id !== order.id))}
+                >
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div>
                         <CardTitle className="text-lg font-semibold">#{order.order_number}</CardTitle>
                         <CardDescription className="flex items-center gap-2 mt-1">
                           <Calendar className="h-4 w-4" />
-                          {new Date(order.created_at).toLocaleDateString("uz-UZ", {
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {format(new Date(order.created_at), "PPP, HH:mm", { locale: uz })}
                         </CardDescription>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <Badge className={`${statusColors[order.status as keyof typeof statusColors]} border-0`}>
                           {statusLabels[order.status as keyof typeof statusLabels]}
                         </Badge>
@@ -514,7 +699,11 @@ export default function OrdersPage() {
                         </div>
                         <div className="flex justify-between text-sm">
                           <span>Yetkazib berish:</span>
-                          <span className="font-medium">{order.delivery_fee.toLocaleString()} so'm</span>
+                          <span className="font-medium">
+                            {order.delivery_with_service
+                              ? `${order.delivery_fee.toLocaleString()} so'm`
+                              : "Mavjud emas"}
+                          </span>
                         </div>
                         <div className="flex justify-between text-base font-semibold border-t pt-2">
                           <span>Jami:</span>
@@ -534,6 +723,11 @@ export default function OrdersPage() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-medium line-clamp-1">{item.products.name_uz}</p>
+                              {getProductVariations(item.variations) && (
+                                <p className="text-xs text-muted-foreground">
+                                  {getProductVariations(item.variations)}
+                                </p>
+                              )}
                               {getProductSpecifications(item.products.specifications) && (
                                 <p className="text-xs text-muted-foreground">
                                   {getProductSpecifications(item.products.specifications)}
@@ -612,10 +806,7 @@ export default function OrdersPage() {
                           variant="outline"
                           size="sm"
                           className="ios-button bg-transparent"
-                          onClick={() => {
-                            // Navigate to edit page or open edit dialog
-                            router.push(`/orders/edit/${order.id}`)
-                          }}
+                          onClick={() => handleEditOrder(order)}
                         >
                           <Edit className="h-3 w-3 mr-1" />
                           Tahrirlash
@@ -681,10 +872,6 @@ export default function OrdersPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="table">
-          <ModderSheet data={orders} onDataChange={setOrders} tableName="orders" onRefresh={fetchOrders} />
-        </TabsContent>
-
         <TabsContent value="analytics">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <Card className="ios-card">
@@ -715,7 +902,19 @@ export default function OrdersPage() {
               </CardContent>
             </Card>
 
-           
+            <Card className="ios-card">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Yetkazilgan</p>
+                    <p className="text-2xl font-bold text-foreground">{analytics.deliveredOrders}</p>
+                  </div>
+                  <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
+                    <Check className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             <Card className="ios-card">
               <CardContent className="p-6">
@@ -744,6 +943,51 @@ export default function OrdersPage() {
         order={paymentOrder}
         onSuccess={fetchOrders}
       />
+
+      {/* Manual Price Input Dialog - This dialog will appear as a popup */}
+      {isManualPriceInputDialogOpen && orderToAcceptWithManualPrice && (
+        <ManualPriceInputDialog
+          open={isManualPriceInputDialogOpen}
+          onOpenChange={setIsManualPriceInputDialogOpen}
+          order={orderToAcceptWithManualPrice}
+          onSuccess={() => {
+            fetchOrders(); // Refresh orders after successful price update and acceptance
+            setOrderToAcceptWithManualPrice(null); // Clear the order being processed
+          }}
+        />
+      )}
+
+      {/* ModderSheet (if you have a separate "Table View" tab or similar where it's used) */}
+      {/* As per your request, ModderSheet will NOT be used as a popup from 'Edit' button, */}
+      {/* so this block below is commented out or removed. If you have a different tab that uses it, */}
+      {/* ensure its props are compatible with your current ModderSheet.tsx file. */}
+      {/* {isModderSheetOpen && modderSheetOrder && (
+        <ModderSheet
+          open={isModderSheetOpen}
+          onOpenChange={(isOpen) => {
+            setIsModderSheetOpen(isOpen);
+            if (!isOpen) {
+              setModderSheetOrder(null);
+              fetchOrders();
+            }
+          }}
+          data={[modderSheetOrder]}
+          onDataChange={(updatedRecords: any[]) => {
+            if (updatedRecords.length > 0) {
+              const updatedOrder = updatedRecords[0] as Order;
+              setOrders((prevOrders) =>
+                prevOrders.map((order) =>
+                  order.id === updatedOrder.id ? updatedOrder : order
+                )
+              );
+            }
+          }}
+          tableName="orders"
+          onRefresh={fetchOrders}
+          isEditingSingleRecord={true}
+          editingRecordId={modderSheetOrder.id}
+        />
+      )} */}
     </div>
   )
 }

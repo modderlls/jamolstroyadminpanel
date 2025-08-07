@@ -345,7 +345,7 @@ export default function ProductsPage() {
             {/* Products List */}
             <div className="space-y-4">
               {products.map((product) => (
-                <Card key={product.id} className="ios-card hover:shadow-md transition-all duration-300">
+                <Card key={product.id} className="ios-card hover:shadow-lg transition-all duration-300">
                   <CardContent className="p-4">
                     <div className="flex items-start gap-4">
                       {/* Product Image */}
