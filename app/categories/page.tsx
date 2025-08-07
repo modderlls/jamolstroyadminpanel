@@ -164,7 +164,10 @@ export default function CategoriesPage() {
     }
 
     try {
-      const { error } = await supabase.from("categories").delete().eq("id", category.id)
+      const { error } = await supabase
+      .from("categories")
+      .update({ is_active: false }) // is_active ustunini false qilyapmiz
+      .eq("id", category.id)
 
       if (error) throw error
 
