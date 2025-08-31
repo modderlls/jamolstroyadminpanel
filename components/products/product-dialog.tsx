@@ -16,6 +16,7 @@ import Image from "next/image"
 import { CategorySelector } from "@/components/categories/category-selector"
 import { toast } from "sonner"
 
+// Mahsulot interfeysidagi specifications maydonini yangilaymiz
 interface Product {
   id: string
   name_uz: string
@@ -30,11 +31,11 @@ interface Product {
   product_type: string
   has_delivery: boolean
   delivery_price: number
-  minimum_order: number
+  minimum_order: number // Bu 'min_order_quantity' bo'lishi kerak edi, lekin mavjud kodga moslashamiz
   category_id: string
-  specifications?: Record<string, Array<{ name: string; value: string; price?: number }>>
+  specifications?: Record<string, Array<{ name: string; value: string; price?: number }>> // price qo'shildi
   rental_time_unit?: string
-  rental_duration?: number
+  rental_duration?: number // Bu 'rental_price_per_unit' va boshqalar bo'lishi mumkin edi
 }
 
 interface Category {
@@ -52,9 +53,10 @@ interface ProductDialogProps {
   product: Product | null
   categories: Category[]
   onSuccess: () => void
-  onCategoriesUpdate?: () => void // <<<<< ProductDialogProps: Bu prop ixtiyoriy bo'lishi mumkin
+  onCategoriesUpdate?: () => void
 }
 
+// SpecificationItem interfeysini narx maydoni bilan yangilaymiz
 interface SpecificationItem {
   name: string
   value: string
@@ -359,15 +361,21 @@ export function ProductDialog({
     }))
   }
 
+  // updateSpecificationItem'ga price uchun Number konvertatsiyasini qo'shamiz
   const updateSpecificationItem = (specType: string, index: number, field: keyof SpecificationItem, value: any) => {
-    setFormData((prev) => ({
-      ...prev,
-      specifications: {
-        ...prev.specifications,
-        [specType]:
-          prev.specifications[specType]?.map((item, i) => (i === index ? { ...item, [field]: value } : item)) || [],
-      },
-    }))
+    setFormData((prev) => {
+      const updatedValue = field === 'price' ? (value === '' ? undefined : Number(value)) : value;
+      return {
+        ...prev,
+        specifications: {
+          ...prev.specifications,
+          [specType]:
+            prev.specifications[specType]?.map((item, i) =>
+              i === index ? { ...item, [field]: updatedValue } : item,
+            ) || [],
+        },
+      }
+    })
   }
 
   const removeSpecificationItem = (specType: string, index: number) => {
@@ -568,11 +576,11 @@ export function ProductDialog({
                 </div>
 
                 <CategorySelector
-    value={formData.category_id}
-    onChange={(value) => setFormData((prev) => ({ ...prev, category_id: value }))}
-    categories={categories}
-    onCategoriesUpdate={onCategoriesUpdate} // <<<<< onCategoriesUpdate propini CategorySelectorga uzatamiz
-  />
+                  value={formData.category_id}
+                  onChange={(value) => setFormData((prev) => ({ ...prev, category_id: value }))}
+                  categories={categories}
+                  onCategoriesUpdate={onCategoriesUpdate}
+                />
               </CardContent>
             </Card>
 
@@ -700,8 +708,6 @@ export function ProductDialog({
                     />
                     <Label htmlFor="has_delivery">Yetkazib berish mavjud</Label>
                   </div>
-
-                  
                 </div>
               </CardContent>
             </Card>
@@ -761,7 +767,16 @@ export function ProductDialog({
                             onChange={(e) => updateSpecificationItem(specType, index, "value", e.target.value)}
                           />
                         </div>
-                        
+                        {/* YANGI QO'SHILGAN NARX MAYDONI */}
+                        <div className="flex-1">
+                          <Label className="text-xs">Qo'shimcha narx (+so'm)</Label>
+                          <Input
+                            type="number"
+                            placeholder="50000"
+                            value={item.price ?? ""}
+                            onChange={(e) => updateSpecificationItem(specType, index, "price", e.target.value)}
+                          />
+                        </div>
                         <Button
                           type="button"
                           variant="outline"
