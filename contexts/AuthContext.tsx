@@ -99,38 +99,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     getInitialSession()
 
-    // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       console.log("Auth state changed:", event, session)
 
-      if (event === "SIGNED_IN" && session?.user) {
-        // Get user data from database
-        const { data: userData, error } = await supabase.from("users").select("*").eq("id", session.user.id).single()
+      // Use setTimeout to avoid blocking the auth callback
+      setTimeout(async () => {
+        if (event === "SIGNED_IN" && session?.user) {
+          // Get user data from database
+          const { data: userData, error } = await supabase.from("users").select("*").eq("id", session.user.id).single()
 
-        if (!error && userData && userData.role === "admin") {
-          setUser(userData)
-          setSession(session)
-          // Set cookie for middleware
-          document.cookie = `jamolstroy_admin_token=${userData.id}; path=/; max-age=${7 * 24 * 60 * 60}`
-          // Store in localStorage
-          localStorage.setItem("jamolstroy_admin", JSON.stringify(userData))
-          localStorage.setItem("jamolstroy_session", JSON.stringify(session))
-        } else {
-          // Not admin, sign out
-          await supabase.auth.signOut()
+          if (!error && userData && userData.role === "admin") {
+            setUser(userData)
+            setSession(session)
+            // Set cookie for middleware
+            document.cookie = `jamolstroy_admin_token=${userData.id}; path=/; max-age=${7 * 24 * 60 * 60}`
+            // Store in localStorage
+            localStorage.setItem("jamolstroy_admin", JSON.stringify(userData))
+            localStorage.setItem("jamolstroy_session", JSON.stringify(session))
+          } else {
+            // Not admin, sign out
+            await supabase.auth.signOut()
+            localStorage.removeItem("jamolstroy_admin")
+            localStorage.removeItem("jamolstroy_session")
+          }
+        } else if (event === "SIGNED_OUT") {
+          setUser(null)
+          setSession(null)
+          document.cookie = "jamolstroy_admin_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
           localStorage.removeItem("jamolstroy_admin")
           localStorage.removeItem("jamolstroy_session")
         }
-      } else if (event === "SIGNED_OUT") {
-        setUser(null)
-        setSession(null)
-        document.cookie = "jamolstroy_admin_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
-        localStorage.removeItem("jamolstroy_admin")
-        localStorage.removeItem("jamolstroy_session")
-      }
-      setLoading(false)
+        setLoading(false)
+      }, 0)
     })
 
     return () => subscription.unsubscribe()

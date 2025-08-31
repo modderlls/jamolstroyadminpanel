@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect, useRef, useCallback, useMemo } from "react" // useMemo added for rentals section
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -25,10 +27,8 @@ import {
   Truck,
   CreditCard,
   Clock,
-  DollarSign,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { ModderSheet } from "@/components/moddersheet/modder-sheet"
 import { OrderViewDialog } from "@/components/orders/order-view-dialog"
 import { PaymentConfirmDialog } from "@/components/orders/payment-confirm-dialog"
 import { ManualPriceInputDialog } from "@/components/orders/manual-price-input-dialog"
@@ -57,7 +57,7 @@ interface Order {
   borrowed_additional_period: number
   borrowed_updated_at: string
   delivery_with_service: boolean
-  was_claimed_at?: string; // New: Timestamp when order was claimed/confirmed
+  was_claimed_at?: string // New: Timestamp when order was claimed/confirmed
   customers: {
     first_name: string
     last_name: string
@@ -72,14 +72,14 @@ interface Order {
       name_uz: string
       images: string[]
       specifications?: any
-      price?: number; // Added for rental calculations
+      price?: number // Added for rental calculations
     }
     variations?: any // Assuming variations are on order_items
-    rental_duration?: number; // For rental products
-    rental_time_unit?: 'hour' | 'day' | 'week' | 'month'; // For rental products
-    was_seen?: boolean; // For rentals
-    was_returned?: boolean; // For rentals
-    return_date?: string; // For rentals
+    rental_duration?: number // For rental products
+    rental_time_unit?: "hour" | "day" | "week" | "month" // For rental products
+    was_seen?: boolean // For rentals
+    was_returned?: boolean // For rentals
+    return_date?: string // For rentals
   }>
 }
 
@@ -112,7 +112,7 @@ export default function OrdersPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [newOrderIds, setNewOrderIds] = useState<string[]>([])
-  const [overdueRentalsCount, setOverdueRentalsCount] = useState(0); // State for blinking tab
+  const [overdueRentalsCount, setOverdueRentalsCount] = useState(0) // State for blinking tab
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("")
@@ -126,69 +126,67 @@ export default function OrdersPage() {
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
 
   // Manual Price Input Dialog states
-  const [isManualPriceInputDialogOpen, setIsManualPriceInputDialogOpen] = useState(false);
-  const [orderToAcceptWithManualPrice, setOrderToAcceptWithManualPrice] = useState<Order | null>(null);
+  const [isManualPriceInputDialogOpen, setIsManualPriceInputDialogOpen] = useState(false)
+  const [orderToAcceptWithManualPrice, setOrderToAcceptWithManualPrice] = useState<Order | null>(null)
 
   // ModderSheet states (if used elsewhere in other tabs, not as popup from 'Edit')
-  const [modderSheetOrder, setModderSheetOrder] = useState<Order | null>(null);
-  const [isModderSheetOpen, setIsModderSheetOpen] = useState(false);
+  const [modderSheetOrder, setModderSheetOrder] = useState<Order | null>(null)
+  const [isModderSheetOpen, setIsModderSheetOpen] = useState(false)
 
-
-  const newOrderSoundRef = useRef<HTMLAudioElement | null>(null);
-  const updatedOrderSoundRef = useRef<HTMLAudioElement | null>(null);
-  const rentalOverdueSoundRef = useRef<HTMLAudioElement | null>(null); // New sound ref
+  const newOrderSoundRef = useRef<HTMLAudioElement | null>(null)
+  const updatedOrderSoundRef = useRef<HTMLAudioElement | null>(null)
+  const rentalOverdueSoundRef = useRef<HTMLAudioElement | null>(null) // New sound ref
 
   const router = useRouter()
 
   // Function to calculate rental overdue fine
   const calculateRentalFine = useCallback((orderItem: any, claimedAt: string) => {
     if (!orderItem.rental_duration || !orderItem.rental_time_unit || !claimedAt || !orderItem.products?.price) {
-      return 0; // Cannot calculate fine if necessary data is missing
+      return 0 // Cannot calculate fine if necessary data is missing
     }
 
-    const claimedDate = new Date(claimedAt);
-    const now = new Date();
+    const claimedDate = new Date(claimedAt)
+    const now = new Date()
 
-    let overdueUnits = 0;
-    const basePricePerUnit = orderItem.products.price; // Assuming product price is the base rental price for one unit of time
+    let overdueUnits = 0
+    const basePricePerUnit = orderItem.products.price // Assuming product price is the base rental price for one unit of time
 
-    if (orderItem.rental_time_unit === 'day') {
-        const expectedEndDate = new Date(claimedDate);
-        expectedEndDate.setDate(claimedDate.getDate() + orderItem.rental_duration);
-        if (now > expectedEndDate) {
-            overdueUnits = differenceInDays(now, expectedEndDate);
-        }
-    } else if (orderItem.rental_time_unit === 'hour') {
-        const expectedEndDate = new Date(claimedDate);
-        expectedEndDate.setHours(claimedDate.getHours() + orderItem.rental_duration);
-        if (now > expectedEndDate) {
-            overdueUnits = differenceInHours(now, expectedEndDate);
-        }
-    } else if (orderItem.rental_time_unit === 'week') {
-        const expectedEndDate = new Date(claimedDate);
-        expectedEndDate.setDate(claimedDate.getDate() + (orderItem.rental_duration * 7));
-        if (now > expectedEndDate) {
-            overdueUnits = differenceInWeeks(now, expectedEndDate);
-        }
-    } else if (orderItem.rental_time_unit === 'month') {
-        const expectedEndDate = new Date(claimedDate);
-        expectedEndDate.setMonth(claimedDate.getMonth() + orderItem.rental_duration);
-        if (now > expectedEndDate) {
-            overdueUnits = differenceInMonths(now, expectedEndDate);
-        }
+    if (orderItem.rental_time_unit === "day") {
+      const expectedEndDate = new Date(claimedDate)
+      expectedEndDate.setDate(claimedDate.getDate() + orderItem.rental_duration)
+      if (now > expectedEndDate) {
+        overdueUnits = differenceInDays(now, expectedEndDate)
+      }
+    } else if (orderItem.rental_time_unit === "hour") {
+      const expectedEndDate = new Date(claimedDate)
+      expectedEndDate.setHours(claimedDate.getHours() + orderItem.rental_duration)
+      if (now > expectedEndDate) {
+        overdueUnits = differenceInHours(now, expectedEndDate)
+      }
+    } else if (orderItem.rental_time_unit === "week") {
+      const expectedEndDate = new Date(claimedDate)
+      expectedEndDate.setDate(claimedDate.getDate() + orderItem.rental_duration * 7)
+      if (now > expectedEndDate) {
+        overdueUnits = differenceInWeeks(now, expectedEndDate)
+      }
+    } else if (orderItem.rental_time_unit === "month") {
+      const expectedEndDate = new Date(claimedDate)
+      expectedEndDate.setMonth(claimedDate.getMonth() + orderItem.rental_duration)
+      if (now > expectedEndDate) {
+        overdueUnits = differenceInMonths(now, expectedEndDate)
+      }
     }
 
     // Only apply fine if product is not returned and is overdue
     if (overdueUnits > 0 && !orderItem.was_returned) {
-        return overdueUnits * basePricePerUnit * orderItem.quantity;
+      return overdueUnits * basePricePerUnit * orderItem.quantity
     }
-    return 0;
-  }, []);
-
+    return 0
+  }, [])
 
   const fetchOrders = useCallback(async () => {
     try {
-      setLoading(true);
+      setLoading(true)
       let query = supabase.from("orders").select(
         `
           *,
@@ -250,10 +248,10 @@ export default function OrdersPage() {
 
       if (error) throw error
 
-      const fetchedOrders: Order[] = (data || []).map(order => ({
+      const fetchedOrders: Order[] = (data || []).map((order) => ({
         ...order,
-        order_items: order.order_items || []
-      }));
+        order_items: order.order_items || [],
+      }))
 
       setOrders(fetchedOrders)
       setTotalCount(count || 0)
@@ -264,24 +262,23 @@ export default function OrdersPage() {
     } finally {
       setLoading(false)
     }
-  }, [currentPage, searchQuery, statusFilter, paymentFilter, dateFilter]);
-
+  }, [currentPage, searchQuery, statusFilter, paymentFilter, dateFilter])
 
   useEffect(() => {
     // Initialize audio elements only once
     if (!newOrderSoundRef.current) {
-      newOrderSoundRef.current = new Audio('/sounds/new-order.mp3');
-      newOrderSoundRef.current.load(); // Preload for faster playback
+      newOrderSoundRef.current = new Audio("https://hebbkx1anhila5yf.public.blob.vercel-storage.com/git-blob/prj_ATfeU1E97Oc7ICljV8DPAV1ZX4O2/1yah_yP6We4Ip9uy7X9eSv/public/sounds/new-order.mp3")
+      newOrderSoundRef.current.load() // Preload for faster playback
     }
     if (!updatedOrderSoundRef.current) {
-      updatedOrderSoundRef.current = new Audio('/sounds/update-order.mp3');
-      updatedOrderSoundRef.current.load(); // Preload
+      updatedOrderSoundRef.current = new Audio("https://hebbkx1anhila5yf.public.blob.vercel-storage.com/git-blob/prj_ATfeU1E97Oc7ICljV8DPAV1ZX4O2/mztxh3QnK2C6fO0I6a-jdG/public/sounds/update-order.mp3")
+      updatedOrderSoundRef.current.load() // Preload
     }
-    if (!rentalOverdueSoundRef.current) { // Initialize new sound
-      rentalOverdueSoundRef.current = new Audio('/sounds/alert.mp3'); // Assuming you have an alert sound
-      rentalOverdueSoundRef.current.load();
+    if (!rentalOverdueSoundRef.current) {
+      // Initialize new sound
+      rentalOverdueSoundRef.current = new Audio("https://hebbkx1anhila5yf.public.blob.vercel-storage.com/git-blob/prj_ATfeU1E97Oc7ICljV8DPAV1ZX4O2/1yah_yP6We4Ip9uy7X9eSv/public/sounds/alert.mp3") // Assuming you have an alert sound
+      rentalOverdueSoundRef.current.load()
     }
-
 
     fetchOrders()
 
@@ -295,22 +292,26 @@ export default function OrdersPage() {
           table: "orders",
         },
         async (payload) => {
-          console.log("Realtime change received!", payload);
+          console.log("Realtime change received!", payload)
 
           // Attempt to play sound, handling potential autoplay restrictions
           const playSound = (audioRef: React.MutableRefObject<HTMLAudioElement | null>) => {
-            audioRef.current?.play().catch(e => {
-              if (e.name === 'NotAllowedError') {
-                console.warn("Autoplay was prevented. User must interact with the document first for sound to play: https://goo.gl/xX8pDD");
+            audioRef.current?.play().catch((e) => {
+              if (e.name === "NotAllowedError") {
+                console.warn(
+                  "Autoplay was prevented. User must interact with the document first for sound to play: https://goo.gl/xX8pDD",
+                )
               } else {
-                console.error("Error playing sound:", e);
+                console.error("Error playing sound:", e)
               }
-            });
-          };
+            })
+          }
 
           // Function to fetch full order data, including nested `order_items` and `customers`
           const fetchAndProcessOrder = async (id: string) => {
-            const { data: fullOrderData, error } = await supabase.from("orders").select(`
+            const { data: fullOrderData, error } = await supabase
+              .from("orders")
+              .select(`
               *,
               customers:customer_id(first_name, last_name, phone_number),
               order_items(
@@ -326,84 +327,112 @@ export default function OrdersPage() {
                 was_returned,
                 return_date
               )
-            `).eq("id", id).single();
+            `)
+              .eq("id", id)
+              .single()
 
             if (error) {
-              console.error("Error fetching full order details during realtime update:", error);
-              return null;
+              console.error("Error fetching full order details during realtime update:", error)
+              return null
             }
             // Ensure order_items is always an array, even if null from DB
-            return { ...fullOrderData, order_items: fullOrderData.order_items || [] } as Order;
-          };
-
+            return { ...fullOrderData, order_items: fullOrderData.order_items || [] } as Order
+          }
 
           if (payload.eventType === "INSERT") {
-            const newOrder = await fetchAndProcessOrder(payload.new.id);
+            const newOrder = await fetchAndProcessOrder(payload.new.id)
             if (newOrder) {
-              setOrders((prevOrders) => [newOrder, ...prevOrders]);
-              setNewOrderIds((prevIds) => [...prevIds, newOrder.id]);
-              toast.info(`Yangi buyurtma qo'shildi: #${newOrder.order_number}`);
-              setTotalCount((prevCount) => prevCount + 1);
-              playSound(newOrderSoundRef);
+              setOrders((prevOrders) => [newOrder, ...prevOrders])
+              setNewOrderIds((prevIds) => [...prevIds, newOrder.id])
+              toast.info(`Yangi buyurtma qo'shildi: #${newOrder.order_number}`)
+              setTotalCount((prevCount) => prevCount + 1)
+              playSound(newOrderSoundRef)
+
+              // Send SMS notification to admin about new order
+              try {
+                const orderDetails =
+                  newOrder.order_items
+                    ?.map((item) => `${item.products?.name_uz || "Mahsulot"} x${item.quantity}`)
+                    .join(", ") || "Buyurtma tafsilotlari"
+
+                await fetch("/api/sms/send-new-order-notification", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    orderNumber: newOrder.order_number,
+                    customerName: newOrder.customer_name,
+                    customerPhone: newOrder.customer_phone,
+                    address: newOrder.delivery_address,
+                    orderDetails: orderDetails,
+                  }),
+                })
+                console.log("[v0] SMS notification sent for new order:", newOrder.order_number)
+              } catch (error) {
+                console.error("[v0] Failed to send SMS notification for new order:", error)
+              }
             }
           } else if (payload.eventType === "UPDATE") {
-            const updatedOrder = await fetchAndProcessOrder(payload.new.id);
+            const updatedOrder = await fetchAndProcessOrder(payload.new.id)
             if (updatedOrder) {
               setOrders((prevOrders) =>
-                prevOrders.map((order) =>
-                  order.id === updatedOrder.id ? updatedOrder : order
-                )
-              );
-              toast.info(`Buyurtma yangilandi: #${updatedOrder.order_number}`);
-              playSound(updatedOrderSoundRef);
+                prevOrders.map((order) => (order.id === updatedOrder.id ? updatedOrder : order)),
+              )
+              toast.info(`Buyurtma yangilandi: #${updatedOrder.order_number}`)
+              playSound(updatedOrderSoundRef)
             }
           } else if (payload.eventType === "DELETE") {
-            const deletedOrderId = payload.old?.id;
+            const deletedOrderId = payload.old?.id
             if (deletedOrderId) {
-              setOrders((prevOrders) =>
-                prevOrders.filter((order) => order.id !== deletedOrderId)
-              );
-              setTotalCount((prevCount) => prevCount - 1);
-              toast.info(`Buyurtma o'chirildi: #${payload.old?.order_number || ''}`);
+              setOrders((prevOrders) => prevOrders.filter((order) => order.id !== deletedOrderId))
+              setTotalCount((prevCount) => prevCount - 1)
+              toast.info(`Buyurtma o'chirildi: #${payload.old?.order_number || ""}`)
             }
           }
-        }
+        },
       )
-      .subscribe();
+      .subscribe()
 
     // Cleanup function: Unsubscribe from the channel when the component unmounts
     return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [fetchOrders]); // `fetchOrders` is a dependency here because we want to trigger it on mount
-
+      supabase.removeChannel(channel)
+    }
+  }, [fetchOrders]) // `fetchOrders` is a dependency here because we want to trigger it on mount
 
   const handleAcceptOrder = async (orderId: string) => {
     try {
-      const orderToAccept = orders.find(order => order.id === orderId);
+      const orderToAccept = orders.find((order) => order.id === orderId)
       if (orderToAccept) {
         // Check for manual variations with unassigned additional_price (0, null, or undefined)
-        const requiresPriceInput = (orderToAccept.order_items || []).some(item => {
+        const requiresPriceInput = (orderToAccept.order_items || []).some((item) => {
           if (item.variations) {
-            let variations;
+            let variations
             try {
-              variations = typeof item.variations === 'string' ? JSON.parse(item.variations) : item.variations;
+              variations = typeof item.variations === "string" ? JSON.parse(item.variations) : item.variations
             } catch (e) {
-              console.error("Error parsing variations for price check:", e);
-              return false;
+              console.error("Error parsing variations for price check:", e)
+              return false
             }
-            return Array.isArray(variations) && variations.some(
-              (variation: any) => variation.manual_type === true && (variation.additional_price === 0 || variation.additional_price === null || typeof variation.additional_price === 'undefined')
-            );
+            return (
+              Array.isArray(variations) &&
+              variations.some(
+                (variation: any) =>
+                  variation.manual_type === true &&
+                  (variation.additional_price === 0 ||
+                    variation.additional_price === null ||
+                    typeof variation.additional_price === "undefined"),
+              )
+            )
           }
-          return false;
-        });
+          return false
+        })
 
         if (requiresPriceInput) {
           // Open the manual price input dialog if manual prices are needed
-          setOrderToAcceptWithManualPrice(orderToAccept);
-          setIsManualPriceInputDialogOpen(true);
-          return; // Stop the acceptance process here, it will resume after dialog submission
+          setOrderToAcceptWithManualPrice(orderToAccept)
+          setIsManualPriceInputDialogOpen(true)
+          return // Stop the acceptance process here, it will resume after dialog submission
         }
       }
 
@@ -417,7 +446,7 @@ export default function OrdersPage() {
           updated_at: new Date().toISOString(),
         })
         .eq("id", orderId)
-        .select(); // Select the updated row to get the latest data
+        .select() // Select the updated row to get the latest data
 
       if (error) throw error
       toast.success("Buyurtma qabul qilindi!")
@@ -438,7 +467,7 @@ export default function OrdersPage() {
             updated_at: new Date().toISOString(),
           })
           .eq("id", orderId)
-          .select(); // Select the updated row to get the latest data
+          .select() // Select the updated row to get the latest data
 
         if (error) throw error
         toast.success("Buyurtma rad etildi.")
@@ -466,8 +495,8 @@ export default function OrdersPage() {
 
   // HandleEditOrder will now navigate to a separate page, not open ModderSheet as a dialog
   const handleEditOrder = (order: Order) => {
-    router.push(`/orders/edit/${order.id}`); // Navigate to a dynamic edit route
-  };
+    router.push(`/orders/edit/${order.id}`) // Navigate to a dynamic edit route
+  }
 
   const clearFilters = () => {
     setStatusFilter("")
@@ -511,93 +540,95 @@ export default function OrdersPage() {
   }
 
   const getProductSpecifications = (specificationsData?: any) => {
-    if (!specificationsData) return null;
+    if (!specificationsData) return null
 
-    let specifications;
-    if (typeof specificationsData === 'string') {
+    let specifications
+    if (typeof specificationsData === "string") {
       try {
-        specifications = JSON.parse(specificationsData);
+        specifications = JSON.parse(specificationsData)
       } catch (error) {
-        console.error("Error parsing specifications string:", specificationsData, error);
-        return null;
+        console.error("Error parsing specifications string:", specificationsData, error)
+        return null
       }
     } else {
-      specifications = specificationsData;
+      specifications = specificationsData
     }
 
-    if (typeof specifications === 'object' && !Array.isArray(specifications)) {
-      const specEntries = Object.entries(specifications);
+    if (typeof specifications === "object" && !Array.isArray(specifications)) {
+      const specEntries = Object.entries(specifications)
       if (specEntries.length > 0) {
-        const [type, values] = specEntries[0];
+        const [type, values] = specEntries[0]
         if (Array.isArray(values) && values.length > 0 && values[0].name) {
-          return `${type}: ${values[0].name}`;
+          return `${type}: ${values[0].name}`
         }
       }
     } else if (Array.isArray(specifications) && specifications.length > 0) {
-      const spec = specifications[0];
+      const spec = specifications[0]
       if (spec.type && spec.name) {
-        return `${spec.type}: ${spec.name}`;
+        return `${spec.type}: ${spec.name}`
       }
     }
 
-    return null;
-  };
+    return null
+  }
 
   const getProductVariations = (variationsData?: any) => {
-    if (!variationsData) return null;
+    if (!variationsData) return null
 
-    let variations;
+    let variations
     try {
-      variations = typeof variationsData === 'string' ? JSON.parse(variationsData) : variationsData;
+      variations = typeof variationsData === "string" ? JSON.parse(variationsData) : variationsData
     } catch (error) {
-      console.error("Error parsing variations string:", variationsData, error);
-      return null;
+      console.error("Error parsing variations string:", variationsData, error)
+      return null
     }
 
     if (Array.isArray(variations) && variations.length > 0) {
-      return variations.map((variation: any) => {
-        if (variation.manual_type) {
-          // Display "narx belgilanmagan" if additional_price is 0, null, or undefined
-          return `${variation.type}: ${variation.name} (Mijoz kiritgan${variation.additional_price === 0 || variation.additional_price === null || typeof variation.additional_price === 'undefined' ? ", narx belgilanmagan" : ""})`;
-        } else {
-          return `${variation.type}: ${variation.name}`;
-        }
-      }).join(", ");
+      return variations
+        .map((variation: any) => {
+          if (variation.manual_type) {
+            // Display "narx belgilanmagan" if additional_price is 0, null, or undefined
+            return `${variation.type}: ${variation.name} (Mijoz kiritgan${variation.additional_price === 0 || variation.additional_price === null || typeof variation.additional_price === "undefined" ? ", narx belgilanmagan" : ""})`
+          } else {
+            return `${variation.type}: ${variation.name}`
+          }
+        })
+        .join(", ")
     }
 
-    return null;
-  };
+    return null
+  }
 
-  const analytics = getAnalyticsData();
+  const analytics = getAnalyticsData()
 
   // --- Rentals Tab Logic ---
   const rentalOrders = useMemo(() => {
-    const rentals = orders.filter(order =>
-      order.status === 'confirmed' &&
-      order.order_items.some(item => item.rental_duration && item.rental_time_unit)
-    );
+    const rentals = orders.filter(
+      (order) =>
+        order.status === "confirmed" && order.order_items.some((item) => item.rental_duration && item.rental_time_unit),
+    )
 
-    let overdueCount = 0;
-    const now = new Date();
+    let overdueCount = 0
+    const now = new Date()
 
-    const processedRentals = rentals.map(order => {
-      let isOverdue = false;
-      let totalFine = 0;
+    const processedRentals = rentals.map((order) => {
+      let isOverdue = false
+      let totalFine = 0
 
-      const updatedOrderItems = order.order_items.map(item => {
-        let itemFine = 0;
+      const updatedOrderItems = order.order_items.map((item) => {
+        let itemFine = 0
         if (item.rental_duration && item.rental_time_unit && order.was_claimed_at && !item.was_returned) {
-          itemFine = calculateRentalFine(item, order.was_claimed_at);
+          itemFine = calculateRentalFine(item, order.was_claimed_at)
           if (itemFine > 0) {
-            isOverdue = true;
+            isOverdue = true
           }
         }
-        totalFine += itemFine;
-        return { ...item, current_fine: itemFine }; // Add fine to item for display
-      });
+        totalFine += itemFine
+        return { ...item, current_fine: itemFine } // Add fine to item for display
+      })
 
-      if (isOverdue && !updatedOrderItems.some(item => item.was_seen)) {
-        overdueCount++;
+      if (isOverdue && !updatedOrderItems.some((item) => item.was_seen)) {
+        overdueCount++
       }
 
       return {
@@ -605,76 +636,78 @@ export default function OrdersPage() {
         order_items: updatedOrderItems,
         is_rental_overdue: isOverdue,
         calculated_fine: totalFine,
-      };
-    });
+      }
+    })
 
-    setOverdueRentalsCount(overdueCount);
-    return processedRentals;
-  }, [orders, calculateRentalFine]);
+    setOverdueRentalsCount(overdueCount)
+    return processedRentals
+  }, [orders, calculateRentalFine])
 
   // Effect to play sound for new overdue rentals and mark tab for blinking
   useEffect(() => {
     if (overdueRentalsCount > 0) {
-      rentalOverdueSoundRef.current?.play().catch(e => {
-        if (e.name === 'NotAllowedError') {
-            console.warn("Autoplay of rental overdue sound prevented.");
+      rentalOverdueSoundRef.current?.play().catch((e) => {
+        if (e.name === "NotAllowedError") {
+          console.warn("Autoplay of rental overdue sound prevented.")
         } else {
-            console.error("Error playing rental overdue sound:", e);
+          console.error("Error playing rental overdue sound:", e)
         }
-      });
+      })
       // You can add a visual indicator (e.g., blinking effect on the tab trigger) here
       // This is often done via CSS classes or a separate state.
       // For simplicity, `overdueRentalsCount` itself can be used to style the tab.
     }
-  }, [overdueRentalsCount]);
+  }, [overdueRentalsCount])
 
   // Handle rental seen (when user clicks into the rental tab)
   const handleRentalTabClick = useCallback(async () => {
-    setActiveTab("rentals"); // Switch to rentals tab
+    setActiveTab("rentals") // Switch to rentals tab
 
-    const unseenOverdueRentals = rentalOrders.filter(r => r.is_rental_overdue && !r.order_items.some(oi => oi.was_seen));
+    const unseenOverdueRentals = rentalOrders.filter(
+      (r) => r.is_rental_overdue && !r.order_items.some((oi) => oi.was_seen),
+    )
 
     if (unseenOverdueRentals.length > 0) {
       // Mark relevant order_items as seen
       for (const order of unseenOverdueRentals) {
         for (const item of order.order_items) {
-          if (item.is_rental_overdue && !item.was_seen) { // Mark only if overdue and not seen
-            await supabase.from('order_items')
-              .update({ was_seen: true })
-              .eq('id', item.id);
+          if (item.is_rental_overdue && !item.was_seen) {
+            // Mark only if overdue and not seen
+            await supabase.from("order_items").update({ was_seen: true }).eq("id", item.id)
           }
         }
       }
-      fetchOrders(); // Refresh to update the `was_seen` status in UI
+      fetchOrders() // Refresh to update the `was_seen` status in UI
     }
-  }, [rentalOrders, fetchOrders]); // Dependencies for callback
-
+  }, [rentalOrders, fetchOrders]) // Dependencies for callback
 
   // Function to handle returning a rental product
-  const handleReturnRental = useCallback(async (orderId: string, orderItemId: string) => {
-    if (confirm("Bu ijara mahsulotini qaytarilgan deb belgilaysizmi?")) {
-      try {
-        const now = new Date().toISOString();
-        const { error: itemError } = await supabase
-          .from('order_items')
-          .update({
-            was_returned: true,
-            return_date: now,
-            was_seen: true, // Mark as seen upon return
-          })
-          .eq('id', orderItemId);
+  const handleReturnRental = useCallback(
+    async (orderId: string, orderItemId: string) => {
+      if (confirm("Bu ijara mahsulotini qaytarilgan deb belgilaysizmi?")) {
+        try {
+          const now = new Date().toISOString()
+          const { error: itemError } = await supabase
+            .from("order_items")
+            .update({
+              was_returned: true,
+              return_date: now,
+              was_seen: true, // Mark as seen upon return
+            })
+            .eq("id", orderItemId)
 
-        if (itemError) throw itemError;
+          if (itemError) throw itemError
 
-        toast.success("Ijara mahsuloti qaytarilgan deb belgilandi.");
-        fetchOrders(); // Refresh to reflect changes
-      } catch (error: any) {
-        console.error("Ijara mahsulotini qaytarishda xatolik:", error);
-        toast.error(`Ijara mahsulotini qaytarishda xatolik: ${error.message}`);
+          toast.success("Ijara mahsuloti qaytarilgan deb belgilandi.")
+          fetchOrders() // Refresh to reflect changes
+        } catch (error: any) {
+          console.error("Ijara mahsulotini qaytarishda xatolik:", error)
+          toast.error(`Ijara mahsulotini qaytarishda xatolik: ${error.message}`)
+        }
       }
-    }
-  }, [fetchOrders]);
-
+    },
+    [fetchOrders],
+  )
 
   if (loading) {
     return (
@@ -703,15 +736,15 @@ export default function OrdersPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex justify-center">
-          <TabsList className="grid w-full max-w-md grid-cols-3"> {/* Changed to 3 columns */}
+          <TabsList className="grid w-full max-w-md grid-cols-3">
+            {" "}
+            {/* Changed to 3 columns */}
             <TabsTrigger value="list">Ro'yxat</TabsTrigger>
             <TabsTrigger value="analytics">Tahlil</TabsTrigger>
             <TabsTrigger value="rentals" onClick={handleRentalTabClick}>
               Arendalar
               {overdueRentalsCount > 0 && (
-                <Badge className="ml-2 bg-red-500 text-white animate-pulse">
-                  {overdueRentalsCount}
-                </Badge>
+                <Badge className="ml-2 bg-red-500 text-white animate-pulse">{overdueRentalsCount}</Badge>
               )}
             </TabsTrigger>
           </TabsList>
@@ -901,9 +934,7 @@ export default function OrdersPage() {
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-medium line-clamp-1">{item.products.name_uz}</p>
                               {getProductVariations(item.variations) && (
-                                <p className="text-xs text-muted-foreground">
-                                  {getProductVariations(item.variations)}
-                                </p>
+                                <p className="text-xs text-muted-foreground">{getProductVariations(item.variations)}</p>
                               )}
                               {getProductSpecifications(item.products.specifications) && (
                                 <p className="text-xs text-muted-foreground">
@@ -1110,135 +1141,148 @@ export default function OrdersPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="rentals"> {/* New Rentals Tab Content */}
-            <div className="space-y-4">
-                {rentalOrders.length === 0 && (
-                    <Card className="ios-card">
-                        <CardContent className="text-center py-12">
-                            <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                            <h3 className="text-lg font-medium mb-2">Ijara buyurtmalari topilmadi</h3>
-                            <p className="text-muted-foreground">Hozircha ijara mahsulotlari mavjud emas.</p>
-                        </CardContent>
-                    </Card>
-                )}
-                {rentalOrders.map((order) => (
-                    <Card key={order.id} className={`ios-card ${order.is_rental_overdue && !order.order_items.some(item => item.was_seen) ? 'border-red-500 ring-2 ring-red-300 animate-pulse-once' : ''}`}>
-                        <CardHeader className="pb-3">
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <CardTitle className="text-lg font-semibold">Ijara: #{order.order_number}</CardTitle>
-                                    <CardDescription className="flex items-center gap-2 mt-1">
-                                        <Calendar className="h-4 w-4" />
-                                        {format(new Date(order.created_at), "PPP, HH:mm", { locale: uz })}
-                                    </CardDescription>
-                                </div>
-                                <div className="flex flex-col items-end gap-1">
-                                    <Badge className="bg-yellow-500 text-white">Ijara</Badge>
-                                    {order.is_payed && (
-                                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
-                                            To'langan
-                                        </Badge>
-                                    )}
-                                    {order.is_rental_overdue && (
-                                        <Badge variant="destructive" className="text-xs animate-bounce">
-                                            Muddat o'tgan!
-                                        </Badge>
-                                    )}
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <div className="flex items-center gap-2 text-sm">
-                                        <User className="h-4 w-4 text-muted-foreground" />
-                                        <span className="font-medium">{order.customer_name}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                        <Phone className="h-4 w-4" />
-                                        <span>{order.customer_phone}</span>
-                                    </div>
-                                    <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                                        <MapPin className="h-4 w-4 mt-0.5" />
-                                        <span className="line-clamp-2">{order.delivery_address}</span>
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span>Jami mahsulotlar narxi:</span>
-                                        <span className="font-medium">{order.subtotal.toLocaleString()} so'm</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span>Yetkazib berish:</span>
-                                        <span className="font-medium">{order.delivery_fee.toLocaleString()} so'm</span>
-                                    </div>
-                                    {order.calculated_fine > 0 && (
-                                        <div className="flex justify-between text-sm text-red-600 font-semibold">
-                                            <span>Jarima:</span>
-                                            <span>{order.calculated_fine.toLocaleString()} so'm</span>
-                                        </div>
-                                    )}
-                                    <div className="flex justify-between text-base font-semibold border-t pt-2">
-                                        <span>Umumiy jami:</span>
-                                        <span>{(order.total_amount + order.calculated_fine).toLocaleString()} so'm</span>
-                                    </div>
-                                </div>
-                            </div>
+        <TabsContent value="rentals">
+          {" "}
+          {/* New Rentals Tab Content */}
+          <div className="space-y-4">
+            {rentalOrders.length === 0 && (
+              <Card className="ios-card">
+                <CardContent className="text-center py-12">
+                  <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-lg font-medium mb-2">Ijara buyurtmalari topilmadi</h3>
+                  <p className="text-muted-foreground">Hozircha ijara mahsulotlari mavjud emas.</p>
+                </CardContent>
+              </Card>
+            )}
+            {rentalOrders.map((order) => (
+              <Card
+                key={order.id}
+                className={`ios-card ${order.is_rental_overdue && !order.order_items.some((item) => item.was_seen) ? "border-red-500 ring-2 ring-red-300 animate-pulse-once" : ""}`}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg font-semibold">Ijara: #{order.order_number}</CardTitle>
+                      <CardDescription className="flex items-center gap-2 mt-1">
+                        <Calendar className="h-4 w-4" />
+                        {format(new Date(order.created_at), "PPP, HH:mm", { locale: uz })}
+                      </CardDescription>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge className="bg-yellow-500 text-white">Ijara</Badge>
+                      {order.is_payed && (
+                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                          To'langan
+                        </Badge>
+                      )}
+                      {order.is_rental_overdue && (
+                        <Badge variant="destructive" className="text-xs animate-bounce">
+                          Muddat o'tgan!
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{order.customer_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Phone className="h-4 w-4" />
+                        <span>{order.customer_phone}</span>
+                      </div>
+                      <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <MapPin className="h-4 w-4 mt-0.5" />
+                        <span className="line-clamp-2">{order.delivery_address}</span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Jami mahsulotlar narxi:</span>
+                        <span className="font-medium">{order.subtotal.toLocaleString()} so'm</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Yetkazib berish:</span>
+                        <span className="font-medium">{order.delivery_fee.toLocaleString()} so'm</span>
+                      </div>
+                      {order.calculated_fine > 0 && (
+                        <div className="flex justify-between text-sm text-red-600 font-semibold">
+                          <span>Jarima:</span>
+                          <span>{order.calculated_fine.toLocaleString()} so'm</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-base font-semibold border-t pt-2">
+                        <span>Umumiy jami:</span>
+                        <span>{(order.total_amount + order.calculated_fine).toLocaleString()} so'm</span>
+                      </div>
+                    </div>
+                  </div>
 
-                            <div className="space-y-2">
-                                <h4 className="text-sm font-medium text-muted-foreground">Ijara tarkibi:</h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                                    {order.order_items.map((item) => {
-                                        if (item.rental_duration && item.rental_time_unit) {
-                                            const expectedReturnDate = new Date(order.was_claimed_at!); // Assuming was_claimed_at is set for confirmed rentals
-                                            if (item.rental_time_unit === 'day') {
-                                                expectedReturnDate.setDate(expectedReturnDate.getDate() + item.rental_duration);
-                                            } else if (item.rental_time_unit === 'hour') {
-                                                expectedReturnDate.setHours(expectedReturnDate.getHours() + item.rental_duration);
-                                            } else if (item.rental_time_unit === 'week') {
-                                                expectedReturnDate.setDate(expectedReturnDate.getDate() + (item.rental_duration * 7));
-                                            } else if (item.rental_time_unit === 'month') {
-                                                expectedReturnDate.setMonth(expectedReturnDate.getMonth() + item.rental_duration);
-                                            }
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-muted-foreground">Ijara tarkibi:</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {order.order_items.map((item) => {
+                        if (item.rental_duration && item.rental_time_unit) {
+                          const expectedReturnDate = new Date(order.was_claimed_at!) // Assuming was_claimed_at is set for confirmed rentals
+                          if (item.rental_time_unit === "day") {
+                            expectedReturnDate.setDate(expectedReturnDate.getDate() + item.rental_duration)
+                          } else if (item.rental_time_unit === "hour") {
+                            expectedReturnDate.setHours(expectedReturnDate.getHours() + item.rental_duration)
+                          } else if (item.rental_time_unit === "week") {
+                            expectedReturnDate.setDate(expectedReturnDate.getDate() + item.rental_duration * 7)
+                          } else if (item.rental_time_unit === "month") {
+                            expectedReturnDate.setMonth(expectedReturnDate.getMonth() + item.rental_duration)
+                          }
 
-                                            const isItemOverdue = item.current_fine && item.current_fine > 0;
+                          const isItemOverdue = item.current_fine && item.current_fine > 0
 
-                                            return (
-                                                <div key={item.id} className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg">
-                                                    <div className="w-8 h-8 bg-muted rounded flex items-center justify-center">
-                                                        <Package className="h-4 w-4 text-muted-foreground" />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-xs font-medium line-clamp-1">{item.products.name_uz}</p>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            Muddat: {item.rental_duration} {item.rental_time_unit} (Gacha: {format(expectedReturnDate, "dd.MM.yyyy HH:mm", { locale: uz })})
-                                                        </p>
-                                                        {item.was_returned ? (
-                                                            <Badge className="bg-green-100 text-green-700">Qaytarilgan ({format(new Date(item.return_date!), "dd.MM.yy HH:mm")})</Badge>
-                                                        ) : isItemOverdue ? (
-                                                            <Badge variant="destructive">Jarima: {item.current_fine?.toLocaleString()} so'm</Badge>
-                                                        ) : (
-                                                            <Badge className="bg-blue-100 text-blue-700">Faol</Badge>
-                                                        )}
-                                                    </div>
-                                                    {!item.was_returned && (
-                                                        <Button size="sm" variant="outline" onClick={() => handleReturnRental(order.id, item.id)}>
-                                                            Qaytarildi
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            );
-                                        }
-                                        return null;
-                                    })}
-                                </div>
+                          return (
+                            <div key={item.id} className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg">
+                              <div className="w-8 h-8 bg-muted rounded flex items-center justify-center">
+                                <Package className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium line-clamp-1">{item.products.name_uz}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Muddat: {item.rental_duration} {item.rental_time_unit} (Gacha:{" "}
+                                  {format(expectedReturnDate, "dd.MM.yyyy HH:mm", { locale: uz })})
+                                </p>
+                                {item.was_returned ? (
+                                  <Badge className="bg-green-100 text-green-700">
+                                    Qaytarilgan ({format(new Date(item.return_date!), "dd.MM.yy HH:mm")})
+                                  </Badge>
+                                ) : isItemOverdue ? (
+                                  <Badge variant="destructive">
+                                    Jarima: {item.current_fine?.toLocaleString()} so'm
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-blue-100 text-blue-700">Faol</Badge>
+                                )}
+                              </div>
+                              {!item.was_returned && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleReturnRental(order.id, item.id)}
+                                >
+                                  Qaytarildi
+                                </Button>
+                              )}
                             </div>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
+                          )
+                        }
+                        return null
+                      })}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </TabsContent>
-
       </Tabs>
 
       {/* Dialogs */}
@@ -1258,8 +1302,8 @@ export default function OrdersPage() {
           onOpenChange={setIsManualPriceInputDialogOpen}
           order={orderToAcceptWithManualPrice}
           onSuccess={() => {
-            fetchOrders(); // Refresh orders after successful price update and acceptance
-            setOrderToAcceptWithManualPrice(null); // Clear the order being processed
+            fetchOrders() // Refresh orders after successful price update and acceptance
+            setOrderToAcceptWithManualPrice(null) // Clear the order being processed
           }}
         />
       )}

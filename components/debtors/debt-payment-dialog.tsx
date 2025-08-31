@@ -13,6 +13,7 @@ interface Debtor {
   id: string
   order_number: string
   customer_name: string
+  customer_phone: string
   total_amount: number
 }
 
@@ -66,6 +67,25 @@ export function DebtPaymentDialog({ open, onOpenChange, debtor, onSuccess }: Deb
         .eq("id", debtor.id)
 
       if (updateError) throw updateError
+
+      try {
+        await fetch("/api/sms/send-payment-confirmation", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            customerName: debtor.customer_name,
+            customerPhone: debtor.customer_phone,
+            orderNumber: debtor.order_number,
+            amount: debtor.total_amount,
+          }),
+        })
+        console.log("[v0] Payment confirmation SMS sent to customer:", debtor.customer_phone)
+      } catch (smsError) {
+        console.error("[v0] Failed to send payment confirmation SMS:", smsError)
+        // Don't fail the payment process if SMS fails
+      }
 
       onSuccess()
       onOpenChange(false)

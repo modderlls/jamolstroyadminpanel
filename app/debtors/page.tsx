@@ -17,12 +17,13 @@ import {
   Plus,
   CheckCircle,
   History,
+  MessageSquare,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ModderSheet } from "@/components/moddersheet/modder-sheet"
 import { DebtPaymentDialog } from "@/components/debtors/debt-payment-dialog"
 import { ExtendDebtDialog } from "@/components/debtors/extend-debt-dialog"
-import { toast } from "sonner" // Import toast for notifications
+import { toast } from "sonner"
 
 interface Debtor {
   id: string
@@ -39,8 +40,8 @@ interface Debtor {
   is_payed: boolean
   status: string
   // Add these if they are relevant for previous debtors display
-  updated_at: string;
-  days_late?: number; // Optional for previous debtors
+  updated_at: string
+  days_late?: number // Optional for previous debtors
 }
 
 export default function DebtorsPage() {
@@ -49,6 +50,7 @@ export default function DebtorsPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("current")
+  const [sendingSMS, setSendingSMS] = useState(false)
 
   // Dialog states
   const [paymentDebtor, setPaymentDebtor] = useState<Debtor | null>(null)
@@ -62,7 +64,7 @@ export default function DebtorsPage() {
   }, [])
 
   const fetchDebtors = async () => {
-    setLoading(true); // Set loading true when starting to fetch
+    setLoading(true) // Set loading true when starting to fetch
     try {
       const { data, error } = await supabase
         .from("orders")
@@ -161,6 +163,29 @@ export default function DebtorsPage() {
     setIsExtendDialogOpen(true)
   }
 
+  const handleSendDebtReminders = async () => {
+    setSendingSMS(true)
+    try {
+      const response = await fetch("/api/sms/send-debt-reminders", {
+        method: "POST",
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        toast.success(`${result.totalDebtors} ta qarzdorga SMS yuborildi`)
+        console.log("[v0] SMS results:", result.results)
+      } else {
+        toast.error("SMS yuborishda xatolik yuz berdi")
+      }
+    } catch (error) {
+      console.error("[v0] Error sending SMS reminders:", error)
+      toast.error("SMS yuborishda xatolik yuz berdi")
+    } finally {
+      setSendingSMS(false)
+    }
+  }
+
   const getDebtorStatusColor = (debtor: Debtor) => {
     if (debtor.is_payed) {
       return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
@@ -218,6 +243,14 @@ export default function DebtorsPage() {
             Joriy: {debtors.length} ta, Oldingi: {previousDebtors.length} ta
           </p>
         </div>
+        <Button
+          onClick={handleSendDebtReminders}
+          disabled={sendingSMS || debtors.length === 0}
+          className="ios-button bg-blue-600 hover:bg-blue-700"
+        >
+          <MessageSquare className="h-4 w-4 mr-2" />
+          {sendingSMS ? "SMS yuborilmoqda..." : "Barcha qarzdorlarga SMS"}
+        </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -225,7 +258,6 @@ export default function DebtorsPage() {
           <TabsList className="grid w-full max-w-md grid-cols-3">
             <TabsTrigger value="current">Joriy qarzdorlar</TabsTrigger>
             <TabsTrigger value="previous">Oldingi qarzdorlar</TabsTrigger>
-             
           </TabsList>
         </div>
 
@@ -463,12 +495,13 @@ export default function DebtorsPage() {
                               <span>Qarz olgan sana:</span>
                               <span>{new Date(debtor.borrowed_updated_at).toLocaleDateString("uz-UZ")}</span>
                             </div>
-                            {debtor.days_late !== undefined && debtor.days_late > 0 && ( // Ensure days_late is checked for existence and value
-                              <div className="flex justify-between text-sm text-red-600">
-                                <span>Kechikish:</span>
-                                <span>{debtor.days_late} kun</span>
-                              </div>
-                            )}
+                            {debtor.days_late !== undefined &&
+                              debtor.days_late > 0 && ( // Ensure days_late is checked for existence and value
+                                <div className="flex justify-between text-sm text-red-600">
+                                  <span>Kechikish:</span>
+                                  <span>{debtor.days_late} kun</span>
+                                </div>
+                              )}
                           </div>
 
                           <div className="space-y-2">
