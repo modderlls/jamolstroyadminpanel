@@ -22,23 +22,28 @@ export async function GET(request: NextRequest) {
         )
       `)
       .gte("created_at", twoMinutesAgo)
-      .eq("sms_notification_sent", false)
       .order("created_at", { ascending: false })
 
     if (error) {
       console.error("[v0] Error fetching new orders:", error)
-      return NextResponse.json({ error: "Database error" }, { status: 500 })
+      return NextResponse.json({ error: "Database error", details: error.message }, { status: 500 })
     }
 
     if (!newOrders || newOrders.length === 0) {
       return NextResponse.json({ message: "No new orders found", count: 0 })
     }
 
+    const unnotifiedOrders = newOrders.filter((order) => !order.sms_notification_sent)
+
+    if (unnotifiedOrders.length === 0) {
+      return NextResponse.json({ message: "No new orders to notify", count: 0 })
+    }
+
     let successCount = 0
     let failedCount = 0
 
     // Send SMS notification for each new order
-    for (const order of newOrders) {
+    for (const order of unnotifiedOrders) {
       try {
         const orderDetails = order.order_items
           ? order.order_items.map((item: any) => `${item.products?.name_uz || "Mahsulot"} x${item.quantity}`).join(", ")
@@ -80,12 +85,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       message: "New order check completed",
-      total: newOrders.length,
+      total: unnotifiedOrders.length,
       success: successCount,
       failed: failedCount,
     })
   } catch (error) {
     console.error("[v0] New order cron job error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error", details: error.message }, { status: 500 })
   }
 }

@@ -13,7 +13,6 @@ import {
   Search,
   Filter,
   Eye,
-  Edit,
   Package,
   User,
   MapPin,
@@ -495,10 +494,6 @@ export default function OrdersPage() {
   }
 
   // HandleEditOrder will now navigate to a separate page, not open ModderSheet as a dialog
-  const handleEditOrder = (order: Order) => {
-    router.push(`/orders/edit/${order.id}`) // Navigate to a dynamic edit route
-  }
-
   const clearFilters = () => {
     setStatusFilter("")
     setPaymentFilter("")
@@ -573,51 +568,49 @@ export default function OrdersPage() {
     return null
   }
 
-  const getProductVariations = (variationsData?: any) => {
-    if (!variationsData) return null
+  const getProductVariations = (variations: any) => {
+    if (!variations) return null
 
-    let variations
     try {
-      variations = typeof variationsData === "string" ? JSON.parse(variationsData) : variationsData
+      const variationsArray = typeof variations === "string" ? JSON.parse(variations) : variations
+      if (!Array.isArray(variationsArray) || variationsArray.length === 0) return null
+
+      let totalAdditionalPrice = 0
+      const variationTexts = variationsArray.map((variation: any) => {
+        let text = `${variation.type}: ${variation.name || variation.value}`
+        if (variation.additional_price && variation.additional_price > 0) {
+          text += ` (+${variation.additional_price.toLocaleString()} so'm)`
+          totalAdditionalPrice += variation.additional_price
+        }
+        return text
+      })
+
+      const result = variationTexts.join(", ")
+      return totalAdditionalPrice > 0 ? `${result} | Qo'shimcha: ${totalAdditionalPrice.toLocaleString()} so'm` : result
     } catch (error) {
-      console.error("Error parsing variations string:", variationsData, error)
+      console.error("Error parsing variations:", error)
       return null
     }
+  }
 
-    if (Array.isArray(variations) && variations.length > 0) {
-      return variations
-        .map((variation: any) => {
-          let displayText = `${variation.type}: ${variation.name}`
+  const calculateItemTotalPrice = (item: any) => {
+    let basePrice = item.unit_price * item.quantity
 
-          // Show value if different from name
-          if (variation.value && variation.value !== variation.name) {
-            displayText += ` (${variation.value})`
-          }
-
-          // Show additional price if exists
-          if (variation.additional_price && variation.additional_price > 0) {
-            displayText += ` +${variation.additional_price.toLocaleString()} so'm`
-          }
-
-          // Show manual type indicator
-          if (variation.manual_type) {
-            displayText += " (Qo'lda kiritilgan"
-            if (
-              variation.additional_price === 0 ||
-              variation.additional_price === null ||
-              typeof variation.additional_price === "undefined"
-            ) {
-              displayText += ", narx belgilanmagan"
-            }
-            displayText += ")"
-          }
-
-          return displayText
-        })
-        .join(", ")
+    if (item.variations) {
+      try {
+        const variationsArray = typeof item.variations === "string" ? JSON.parse(item.variations) : item.variations
+        if (Array.isArray(variationsArray)) {
+          const additionalPrice = variationsArray.reduce((total: number, variation: any) => {
+            return total + (variation.additional_price || 0)
+          }, 0)
+          basePrice += additionalPrice * item.quantity
+        }
+      } catch (error) {
+        console.error("Error calculating item price:", error)
+      }
     }
 
-    return null
+    return basePrice
   }
 
   const validateVariations = (
@@ -1015,6 +1008,13 @@ export default function OrdersPage() {
                                 )}
                                 <p className="text-xs text-muted-foreground">
                                   {item.quantity} x {item.unit_price.toLocaleString()} so'm
+                                  {(() => {
+                                    const totalItemPrice = calculateItemTotalPrice(item)
+                                    const basePrice = item.unit_price * item.quantity
+                                    return totalItemPrice !== basePrice
+                                      ? ` = ${totalItemPrice.toLocaleString()} so'm`
+                                      : ""
+                                  })()}
                                 </p>
                               </div>
                             </div>
@@ -1082,15 +1082,6 @@ export default function OrdersPage() {
                         >
                           <Eye className="h-3 w-3 mr-1" />
                           Ko'rish
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="ios-button bg-transparent"
-                          onClick={() => handleEditOrder(order)}
-                        >
-                          <Edit className="h-3 w-3 mr-1" />
-                          Tahrirlash
                         </Button>
                       </div>
                     </div>
