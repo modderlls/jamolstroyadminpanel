@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/daily-debt-reminders",
-      "schedule": "0 9 * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/check-new-orders",

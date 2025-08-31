@@ -6,12 +6,6 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify cron secret
-    const authHeader = request.headers.get("authorization")
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     console.log("[v0] Checking for new orders")
 
     // Get orders from the last 2 minutes to ensure we don't miss any
@@ -19,7 +13,14 @@ export async function GET(request: NextRequest) {
 
     const { data: newOrders, error } = await supabase
       .from("orders")
-      .select("*")
+      .select(`
+        *,
+        customers(first_name, last_name, phone_number),
+        order_items(
+          *,
+          products(name_uz, specifications)
+        )
+      `)
       .gte("created_at", twoMinutesAgo)
       .eq("sms_notification_sent", false)
       .order("created_at", { ascending: false })
@@ -39,17 +40,15 @@ export async function GET(request: NextRequest) {
     // Send SMS notification for each new order
     for (const order of newOrders) {
       try {
-        const orderDetails = order.items
-          ? JSON.parse(order.items)
-              .map((item: any) => `${item.name} x${item.quantity}`)
-              .join(", ")
+        const orderDetails = order.order_items
+          ? order.order_items.map((item: any) => `${item.products?.name_uz || "Mahsulot"} x${item.quantity}`).join(", ")
           : "Buyurtma tafsilotlari"
 
         const message = smsService.getNewOrderMessage(
           order.order_number,
           order.customer_name || "Noma'lum mijoz",
           order.customer_phone || "Telefon ko'rsatilmagan",
-          order.address || "Manzil ko'rsatilmagan",
+          order.delivery_address || "Manzil ko'rsatilmagan",
           orderDetails,
         )
 

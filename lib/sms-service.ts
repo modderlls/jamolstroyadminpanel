@@ -109,10 +109,10 @@ class SMSService {
 
   getDebtReminderMessage(customerName: string, orderNumber: string, amount: number, daysRemaining: number): string {
     if (daysRemaining > 0) {
-      return `Hurmatli ${customerName}, #${orderNumber} buyurtma bo'yicha ${amount.toLocaleString()} so'm qarzingiz ${daysRemaining} kun ichida tugaydi. JamolStroy`
+      return `Hurmatli ${customerName}, #${orderNumber} buyurtma bo'yicha ${amount.toLocaleString()} so'm qarzingiz ${daysRemaining} kun ichida tugaydi. Websayt: jamolstroy.uz - JamolStroy`
     } else {
       const daysOverdue = Math.abs(daysRemaining)
-      return `Hurmatli ${customerName}, #${orderNumber} buyurtma bo'yicha ${amount.toLocaleString()} so'm qarzingiz ${daysOverdue} kun kechikdi. Iltimos, tezda to'lang. JamolStroy`
+      return `Hurmatli ${customerName}, #${orderNumber} buyurtma bo'yicha ${amount.toLocaleString()} so'm qarzingiz ${daysOverdue} kun kechikdi. Iltimos, tezda to'lang. Websayt: jamolstroy.uz - JamolStroy`
     }
   }
 
@@ -128,15 +128,15 @@ Mijoz: ${customerName}
 Telefon: ${customerPhone}
 Manzil: ${address}
 Buyurtma: ${orderDetails}
-Websaytga otib tekshiring. JamolStroy`
+Websaytga otib tekshiring. Websayt: jamolstroy.uz - JamolStroy`
   }
 
   getPaymentConfirmationMessage(customerName: string, orderNumber: string, amount: number): string {
-    return `Hurmatli ${customerName}, #${orderNumber} buyurtma bo'yicha ${amount.toLocaleString()} so'm to'lovingiz qabul qilindi. Rahmat! JamolStroy`
+    return `Hurmatli ${customerName}, #${orderNumber} buyurtma bo'yicha ${amount.toLocaleString()} so'm to'lovingiz qabul qilindi. Rahmat! Websayt: jamolstroy.uz - JamolStroy`
   }
 
   getBroadcastMessage(customMessage: string): string {
-    return `${customMessage} - JamolStroy`
+    return `${customMessage} Websayt: jamolstroy.uz - JamolStroy`
   }
 }
 

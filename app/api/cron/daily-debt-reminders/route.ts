@@ -2,11 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify this is a legitimate cron request (optional security)
-    const authHeader = request.headers.get("authorization")
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    console.log("[v0] Daily debt reminders cron job starting")
 
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/sms/send-debt-reminders`,

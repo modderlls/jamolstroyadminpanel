@@ -587,17 +587,74 @@ export default function OrdersPage() {
     if (Array.isArray(variations) && variations.length > 0) {
       return variations
         .map((variation: any) => {
-          if (variation.manual_type) {
-            // Display "narx belgilanmagan" if additional_price is 0, null, or undefined
-            return `${variation.type}: ${variation.name} (Mijoz kiritgan${variation.additional_price === 0 || variation.additional_price === null || typeof variation.additional_price === "undefined" ? ", narx belgilanmagan" : ""})`
-          } else {
-            return `${variation.type}: ${variation.name}`
+          let displayText = `${variation.type}: ${variation.name}`
+
+          // Show value if different from name
+          if (variation.value && variation.value !== variation.name) {
+            displayText += ` (${variation.value})`
           }
+
+          // Show additional price if exists
+          if (variation.additional_price && variation.additional_price > 0) {
+            displayText += ` +${variation.additional_price.toLocaleString()} so'm`
+          }
+
+          // Show manual type indicator
+          if (variation.manual_type) {
+            displayText += " (Qo'lda kiritilgan"
+            if (
+              variation.additional_price === 0 ||
+              variation.additional_price === null ||
+              typeof variation.additional_price === "undefined"
+            ) {
+              displayText += ", narx belgilanmagan"
+            }
+            displayText += ")"
+          }
+
+          return displayText
         })
         .join(", ")
     }
 
     return null
+  }
+
+  const validateVariations = (
+    variations: any[],
+    productSpecifications: any,
+  ): { isValid: boolean; invalidVariations: any[] } => {
+    if (!variations || !Array.isArray(variations)) {
+      return { isValid: true, invalidVariations: [] }
+    }
+
+    const invalidVariations: any[] = []
+
+    variations.forEach((variation) => {
+      // Skip validation for manual variations
+      if (variation.manual_type === true) {
+        return
+      }
+
+      // Check if variation exists in product specifications
+      const specType = productSpecifications?.[variation.type]
+      if (!specType || !Array.isArray(specType)) {
+        invalidVariations.push(variation)
+        return
+      }
+
+      // Check if the specific value exists in specifications
+      const valueExists = specType.some((spec: any) => spec.value === variation.value || spec.name === variation.value)
+
+      if (!valueExists) {
+        invalidVariations.push(variation)
+      }
+    })
+
+    return {
+      isValid: invalidVariations.length === 0,
+      invalidVariations,
+    }
   }
 
   const analytics = getAnalyticsData()
@@ -928,27 +985,41 @@ export default function OrdersPage() {
                     <div className="space-y-2">
                       <h4 className="text-sm font-medium text-muted-foreground">Buyurtma tarkibi:</h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {order.order_items.map((item) => (
-                          <div key={item.id} className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg">
-                            <div className="w-8 h-8 bg-muted rounded flex items-center justify-center">
-                              <Package className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium line-clamp-1">{item.products.name_uz}</p>
-                              {getProductVariations(item.variations) && (
-                                <p className="text-xs text-muted-foreground">{getProductVariations(item.variations)}</p>
-                              )}
-                              {getProductSpecifications(item.products.specifications) && (
+                        {order.order_items.map((item) => {
+                          const variations = item.variations
+                            ? typeof item.variations === "string"
+                              ? JSON.parse(item.variations)
+                              : item.variations
+                            : []
+                          const validation = validateVariations(variations, item.products.specifications)
+
+                          return (
+                            <div key={item.id} className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg">
+                              <div className="w-8 h-8 bg-muted rounded flex items-center justify-center">
+                                <Package className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium line-clamp-1">{item.products.name_uz}</p>
+                                {getProductVariations(item.variations) && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">
+                                      {getProductVariations(item.variations)}
+                                    </p>
+                                    {!validation.isValid && (
+                                      <p className="text-xs text-red-500 font-medium">
+                                        ⚠️ Noto'g'ri tanlov:{" "}
+                                        {validation.invalidVariations.map((v) => `${v.type}: ${v.value}`).join(", ")}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
                                 <p className="text-xs text-muted-foreground">
-                                  {getProductSpecifications(item.products.specifications)}
+                                  {item.quantity} x {item.unit_price.toLocaleString()} so'm
                                 </p>
-                              )}
-                              <p className="text-xs text-muted-foreground">
-                                {item.quantity} x {item.unit_price.toLocaleString()} so'm
-                              </p>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
 
