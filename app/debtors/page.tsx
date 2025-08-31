@@ -23,6 +23,7 @@ import { supabase } from "@/lib/supabase"
 import { ModderSheet } from "@/components/moddersheet/modder-sheet"
 import { DebtPaymentDialog } from "@/components/debtors/debt-payment-dialog"
 import { ExtendDebtDialog } from "@/components/debtors/extend-debt-dialog"
+import { BroadcastSMSDialog } from "@/components/sms/broadcast-sms-dialog"
 import { toast } from "sonner"
 
 interface Debtor {
@@ -243,14 +244,17 @@ export default function DebtorsPage() {
             Joriy: {debtors.length} ta, Oldingi: {previousDebtors.length} ta
           </p>
         </div>
-        <Button
-          onClick={handleSendDebtReminders}
-          disabled={sendingSMS || debtors.length === 0}
-          className="ios-button bg-blue-600 hover:bg-blue-700"
-        >
-          <MessageSquare className="h-4 w-4 mr-2" />
-          {sendingSMS ? "SMS yuborilmoqda..." : "Barcha qarzdorlarga SMS"}
-        </Button>
+        <div className="flex gap-2">
+          <BroadcastSMSDialog />
+          <Button
+            onClick={handleSendDebtReminders}
+            disabled={sendingSMS || debtors.length === 0}
+            className="ios-button bg-blue-600 hover:bg-blue-700"
+          >
+            <MessageSquare className="h-4 w-4 mr-2" />
+            {sendingSMS ? "SMS yuborilmoqda..." : "Barcha qarzdorlarga SMS"}
+          </Button>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

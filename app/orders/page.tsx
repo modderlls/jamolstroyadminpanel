@@ -36,6 +36,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { format, differenceInHours, differenceInDays, differenceInWeeks, differenceInMonths } from "date-fns" // Added date-fns diff functions
 import { uz } from "date-fns/locale"
+import { BroadcastSMSDialog } from "@/components/sms/broadcast-sms-dialog"
 
 interface Order {
   id: string
@@ -732,6 +733,7 @@ export default function OrdersPage() {
           <h1 className="text-3xl font-bold text-foreground">Buyurtmalar</h1>
           <p className="text-muted-foreground">Jami {totalCount} ta buyurtma</p>
         </div>
+        <BroadcastSMSDialog />
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

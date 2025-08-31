@@ -8,7 +8,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Call the existing debt reminder API
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/sms/send-debt-reminders`,
       {
@@ -21,7 +20,7 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Daily debt reminders cron job executed:", result)
 
     return NextResponse.json({
-      message: "Daily debt reminders sent",
+      message: "Daily debt reminders sent via SMS Gateway",
       result,
     })
   } catch (error) {

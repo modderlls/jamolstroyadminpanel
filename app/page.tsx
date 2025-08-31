@@ -6,6 +6,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
 import { Package, TrendingUp, Users, ShoppingCart, Eye, Star } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { BroadcastSMSDialog } from "@/components/sms/broadcast-sms-dialog"
 
 interface DashboardStats {
   totalProducts: number
@@ -141,6 +142,7 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-foreground">Bosh sahifa</h1>
           <p className="text-muted-foreground">JamolStroy admin panel statistikasi</p>
         </div>
+        <BroadcastSMSDialog />
       </div>
 
       {/* Stats Cards */}
