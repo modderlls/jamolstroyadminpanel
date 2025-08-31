@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Daily debt reminders cron job executed:", result)
 
     return NextResponse.json({
-      message: "Daily debt reminders sent via SMS Gateway",
+      message: "Daily debt reminders sent via SMSMobileAPI",
       result,
     })
   } catch (error) {

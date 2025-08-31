@@ -19,33 +19,40 @@ interface SMSGatewayResponse {
   messages: SMSGatewayMessage[]
 }
 
-class SMSService {
-  private config: SMSConfig = {
-    gatewayUrl: process.env.SMS_GATEWAY_URL || "http://192.168.100.142:8080/smsgateway",
-    username: process.env.SMS_GATEWAY_USERNAME,
-    password: process.env.SMS_GATEWAY_PASSWORD,
-  }
+interface SMSMobileAPIResponse {
+  success: boolean
+  message?: string
+  guid?: string
+}
 
-  private pendingMessages: Map<string, SMSGatewayMessage> = new Map()
+class SMSService {
+  private readonly apiKey = "83df553b58f4a2655fd1a6ad58677bfe6d028b7eae62641c"
+  private readonly baseUrl = "https://api.smsmobileapi.com"
+
+  private pendingMessages: Map<string, SMSMessage> = new Map()
 
   async sendSMS(message: SMSMessage): Promise<boolean> {
     try {
-      const gatewayMessage: SMSGatewayMessage = {
-        id: this.generateUUID(),
-        to: message.to,
-        content: message.message,
+      const url = new URL(`${this.baseUrl}/sendsms`)
+      url.searchParams.append("apikey", this.apiKey)
+      url.searchParams.append("recipients", message.to)
+      url.searchParams.append("message", message.message)
+
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        console.error("[v0] SMSMobileAPI error:", response.status, response.statusText)
+        return false
       }
 
-      this.pendingMessages.set(gatewayMessage.id, gatewayMessage)
-
-      const response = await this.sendViaGateway([gatewayMessage])
-      if (response) {
-        console.log("[v0] SMS sent via SMS Gateway:", message.to)
-        return true
-      }
-
-      console.error("[v0] Failed to send SMS via SMS Gateway")
-      return false
+      const result = await response.json()
+      console.log("[v0] SMS sent via SMSMobileAPI:", message.to, result)
+      return true
     } catch (error) {
       console.error("[v0] SMS service error:", error)
       return false
@@ -53,79 +60,51 @@ class SMSService {
   }
 
   async sendBulkSMS(messages: SMSMessage[]): Promise<{ success: number; failed: number }> {
-    try {
-      const gatewayMessages: SMSGatewayMessage[] = messages.map((msg) => ({
-        id: this.generateUUID(),
-        to: msg.to,
-        content: msg.message,
-      }))
+    let success = 0
+    let failed = 0
 
-      gatewayMessages.forEach((msg) => {
-        this.pendingMessages.set(msg.id, msg)
-      })
-
-      const success = await this.sendViaGateway(gatewayMessages)
-
-      return {
-        success: success ? messages.length : 0,
-        failed: success ? 0 : messages.length,
+    // Send messages one by one (SMSMobileAPI doesn't support bulk sending in single request)
+    for (const message of messages) {
+      try {
+        const sent = await this.sendSMS(message)
+        if (sent) {
+          success++
+        } else {
+          failed++
+        }
+        // Small delay between messages to avoid rate limiting
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      } catch (error) {
+        console.error("[v0] Bulk SMS error for", message.to, error)
+        failed++
       }
-    } catch (error) {
-      console.error("[v0] Bulk SMS service error:", error)
-      return { success: 0, failed: messages.length }
     }
+
+    return { success, failed }
   }
 
-  private async sendViaGateway(messages: SMSGatewayMessage[]): Promise<boolean> {
+  async getSMSLog(): Promise<any[]> {
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "Accept-Charset": "utf-8",
-        "Cache-Control": "no-cache",
-      }
+      const url = new URL(`${this.baseUrl}/log/sent/sms`)
+      url.searchParams.append("apikey", this.apiKey)
 
-      if (this.config.username && this.config.password) {
-        const credentials = btoa(`${this.config.username}:${this.config.password}`)
-        headers.Authorization = `Basic ${credentials}`
-      }
-
-      const response = await fetch(this.config.gatewayUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          messages: [],
-          updates: [],
-        }),
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
       })
 
       if (!response.ok) {
-        console.error("[v0] SMS Gateway error:", response.status, response.statusText)
-        return false
+        console.error("[v0] SMSMobileAPI log error:", response.status, response.statusText)
+        return []
       }
 
-      const sendResponse = await fetch(this.config.gatewayUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          messages: messages,
-          updates: [],
-        }),
-      })
-
-      return sendResponse.ok
+      return await response.json()
     } catch (error) {
-      console.error("[v0] SMS Gateway service error:", error)
-      return false
+      console.error("[v0] SMS log service error:", error)
+      return []
     }
-  }
-
-  private generateUUID(): string {
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0
-      const v = c == "x" ? r : (r & 0x3) | 0x8
-      return v.toString(16)
-    })
   }
 
   getDebtReminderMessage(customerName: string, orderNumber: string, amount: number, daysRemaining: number): string {
