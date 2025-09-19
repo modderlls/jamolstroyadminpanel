@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { smsService } from "@/lib/sms-service"
+import { withPermission } from "@/lib/api-middleware"
 
-export async function POST(request: NextRequest) {
+export const POST = withPermission("payments", "confirm", async (request: NextRequest) => {
   try {
     const body = await request.json()
     const { customerName, customerPhone, orderNumber, amount } = body
@@ -27,4 +28,4 @@ export async function POST(request: NextRequest) {
     console.error("[v0] Error sending payment confirmation:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
+})

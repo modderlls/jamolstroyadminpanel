@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 import { ListObjectsV2Command } from "@aws-sdk/client-s3"
 import { r2Client, R2_BUCKET_NAME, R2_PUBLIC_URL } from "@/lib/r2-client"
+import { withPermission } from "@/lib/api-middleware"
 
-export async function GET() {
+export const GET = withPermission("files", "read", async () => {
   try {
     const command = new ListObjectsV2Command({
       Bucket: R2_BUCKET_NAME,
@@ -35,4 +36,4 @@ export async function GET() {
       { status: 500 },
     )
   }
-}
+})

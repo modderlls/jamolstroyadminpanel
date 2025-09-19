@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { DeleteObjectCommand } from "@aws-sdk/client-s3"
 import { r2Client, R2_BUCKET_NAME } from "@/lib/r2-client"
+import { withPermission } from "@/lib/api-middleware"
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withPermission("files", "delete", async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url)
     const fileName = searchParams.get("file")
@@ -32,4 +33,4 @@ export async function DELETE(request: NextRequest) {
       { status: 500 },
     )
   }
-}
+})

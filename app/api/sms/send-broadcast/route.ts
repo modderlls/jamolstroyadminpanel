@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 import { smsService } from "@/lib/sms-service"
+import { withPermission } from "@/lib/api-middleware"
 
-export async function POST(request: NextRequest) {
+export const POST = withPermission("sms", "send", async (request: NextRequest, user: any) => {
   try {
     const body = await request.json()
     const { message } = body
@@ -11,13 +12,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 })
     }
 
+    // Validate message length
+    if (message.length > 160) {
+      return NextResponse.json({ error: "Message too long (max 160 characters)" }, { status: 400 })
+    }
+
     const { data: customers, error } = await supabase
       .from("orders")
       .select("customer_phone, customer_name")
       .not("customer_phone", "is", null)
 
     if (error) {
-      console.error("[v0] Error fetching customers:", error)
+      console.error("Error fetching customers:", error)
       return NextResponse.json({ error: "Failed to fetch customers" }, { status: 500 })
     }
 
@@ -39,7 +45,17 @@ export async function POST(request: NextRequest) {
 
     const result = await smsService.sendBulkSMS(smsMessages)
 
-    console.log("[v0] Broadcast SMS results:", result)
+    // Log admin action
+    await supabase.rpc("log_admin_action", {
+      p_action_type: "sms_broadcast",
+      p_module: "sms",
+      p_entity_id: null,
+      p_metadata: {
+        message: message.substring(0, 50) + "...",
+        totalCustomers: uniqueCustomers.length,
+        admin_id: user.id,
+      },
+    })
 
     return NextResponse.json({
       message: "Broadcast SMS sent",
@@ -48,7 +64,7 @@ export async function POST(request: NextRequest) {
       failed: result.failed,
     })
   } catch (error) {
-    console.error("[v0] Error sending broadcast SMS:", error)
+    console.error("Error sending broadcast SMS:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
+})

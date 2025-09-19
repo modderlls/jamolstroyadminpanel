@@ -1,9 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { withPermission } from "@/lib/api-middleware"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-export async function POST(request: NextRequest) {
+export const POST = withPermission("products", "edit", async (request: NextRequest, user: any) => {
   try {
     const { productId, variationType, variationName, variationValue, additionalPrice } = await request.json()
 
@@ -54,6 +55,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to update product" }, { status: 500 })
     }
 
+    // Log admin action
+    await supabase.rpc("log_admin_action", {
+      p_action_type: "product_variation_add",
+      p_module: "products",
+      p_entity_id: productId,
+      p_metadata: { variation: newVariation, admin_id: user.id },
+    })
+
     return NextResponse.json({
       message: "Variation added successfully",
       variation: newVariation,
@@ -62,4 +71,4 @@ export async function POST(request: NextRequest) {
     console.error("Error adding manual variation:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
+})

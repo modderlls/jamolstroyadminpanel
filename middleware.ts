@@ -1,15 +1,47 @@
-import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
+import { createServerClient } from "@supabase/ssr"
+import { NextResponse, type NextRequest } from "next/server"
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
+  const response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          response.cookies.set({
+            name,
+            value,
+            ...options,
+          })
+        },
+        remove(name: string, options: any) {
+          response.cookies.set({
+            name,
+            value: "",
+            ...options,
+          })
+        },
+      },
+    },
+  )
+
   // Login page uchun exception
   if (request.nextUrl.pathname === "/login") {
-    return NextResponse.next()
+    return response
   }
 
-  // API routes uchun exception
+  // API routes uchun exception (but we'll add auth checks in individual routes)
   if (request.nextUrl.pathname.startsWith("/api/")) {
-    return NextResponse.next()
+    return response
   }
 
   // Static files uchun exception
@@ -18,17 +50,36 @@ export function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/favicon.ico") ||
     request.nextUrl.pathname.startsWith("/placeholder.svg")
   ) {
-    return NextResponse.next()
+    return response
   }
 
-  // Admin token tekshirish
-  const adminToken = request.cookies.get("jamolstroy_admin_token")
+  // Check authentication with Supabase
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  if (!adminToken) {
+  // If no user, redirect to login
+  if (!user) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  return NextResponse.next()
+  // Check if user is admin
+  const { data: userData, error } = await supabase
+    .from("users")
+    .select("role, is_active, admin_role_id")
+    .eq("id", user.id)
+    .single()
+
+  if (error || !userData || userData.role !== "admin" || !userData.is_active) {
+    // Clear session and redirect to login
+    await supabase.auth.signOut()
+    return NextResponse.redirect(new URL("/login", request.url))
+  }
+
+  // Update last activity
+  await supabase.from("users").update({ last_login_at: new Date().toISOString() }).eq("id", user.id)
+
+  return response
 }
 
 export const config = {
