@@ -2,15 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ----------------- Custom Components ----------------- */
+@layer components {
+  .soft-card {
+    @apply bg-white rounded-lg shadow-md;
+  }
+  
+  .admin-card {
+    @apply soft-card p-4 md:p-6 hover:scale-[1.01] transition-all duration-300 min-w-0 overflow-hidden;
+  }
+}
+
+/* ----------------- Utilities ----------------- */
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
 }
-.admin-card {
-  @apply bg-white rounded-lg shadow-md p-4 md:p-6 hover:scale-[1.01] transition-all duration-300 min-w-0 overflow-hidden;
-}
-
 
 @layer base {
   :root {
