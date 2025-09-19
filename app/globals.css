@@ -260,7 +260,7 @@
 
 /* Fixed layout and responsive improvements */
 .main-container {
-  @apply max-w-full overflow-x-hidden;
+  @apply max-w-full overflow-x-hidden min-h-screen;
 }
 
 .sidebar-layout {
@@ -268,90 +268,314 @@
 }
 
 .content-area {
-  @apply flex-1 min-w-0 overflow-x-hidden;
+  @apply flex-1 min-w-0 overflow-x-hidden p-4 md:p-6;
+}
+
+/* Dashboard specific fixes */
+.dashboard-container {
+  @apply w-full max-w-none overflow-x-hidden space-y-4 md:space-y-6;
+}
+
+.dashboard-grid {
+  @apply grid gap-4 md:gap-6;
+}
+
+.dashboard-grid-1 {
+  @apply grid-cols-1;
+}
+
+.dashboard-grid-2 {
+  @apply grid-cols-1 md:grid-cols-2;
+}
+
+.dashboard-grid-3 {
+  @apply grid-cols-1 md:grid-cols-2 lg:grid-cols-3;
+}
+
+.dashboard-grid-4 {
+  @apply grid-cols-1 sm:grid-cols-2 lg:grid-cols-4;
+}
+
+/* Card improvements to prevent overflow */
+.admin-card {
+  @apply soft-card p-4 md:p-6 hover:scale-[1.01] transition-all duration-300 min-w-0 overflow-hidden;
+}
+
+.admin-card-content {
+  @apply flex items-center justify-between gap-3 min-w-0;
+}
+
+.admin-card-text {
+  @apply flex-1 min-w-0;
+}
+
+.admin-card-icon {
+  @apply flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center;
+}
+
+/* Chart container fixes */
+.kpi-chart {
+  @apply soft-card p-4 md:p-6 min-h-[300px] overflow-hidden;
+}
+
+.chart-responsive {
+  @apply w-full h-[250px] md:h-[300px] overflow-hidden;
+}
+
+/* Text truncation and responsive text */
+.stat-number {
+  @apply text-2xl md:text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent;
+}
+
+.card-title {
+  @apply text-sm font-medium text-muted-foreground truncate;
+}
+
+.card-description {
+  @apply text-xs text-muted-foreground mt-1 truncate;
+}
+
+/* Activity feed improvements */
+.activity-item {
+  @apply flex items-center gap-3 p-3 bg-accent/30 rounded-xl min-w-0 overflow-hidden;
+}
+
+.activity-icon {
+  @apply flex-shrink-0 w-8 h-8 bg-primary rounded-lg flex items-center justify-center;
+}
+
+.activity-content {
+  @apply flex-1 min-w-0;
+}
+
+.activity-title {
+  @apply text-sm font-medium truncate;
+}
+
+.activity-subtitle {
+  @apply text-xs text-muted-foreground truncate;
+}
+
+/* Button improvements */
+.soft-button {
+  @apply rounded-xl transition-all duration-200 active:scale-95 hover:shadow-md px-3 py-2 md:px-4 md:py-2;
+}
+
+.quick-action-buttons {
+  @apply flex flex-wrap gap-2 md:gap-3;
+}
+
+/* Badge and chip improvements */
+.permission-chip {
+  @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20 whitespace-nowrap;
+}
+
+.status-badge {
+  @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap;
+}
+
+/* Performance card improvements */
+.performance-card {
+  @apply flex items-center gap-3 p-3 md:p-4 bg-accent/30 rounded-xl min-w-0 overflow-hidden;
+}
+
+.performance-rank {
+  @apply flex-shrink-0 w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-sm;
+}
+
+.performance-content {
+  @apply flex-1 min-w-0;
+}
+
+.performance-name {
+  @apply font-medium truncate;
+}
+
+.performance-stats {
+  @apply text-sm text-muted-foreground;
+}
+
+/* Top products improvements */
+.product-item {
+  @apply flex items-center justify-between p-3 md:p-4 bg-accent/30 rounded-xl min-w-0 overflow-hidden;
+}
+
+.product-info {
+  @apply flex items-center gap-3 flex-1 min-w-0;
+}
+
+.product-rank {
+  @apply flex-shrink-0 w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-sm;
+}
+
+.product-details {
+  @apply flex-1 min-w-0;
+}
+
+.product-name {
+  @apply font-medium truncate;
+}
+
+.product-stats {
+  @apply flex items-center gap-2 text-sm text-muted-foreground;
+}
+
+/* Header improvements */
+.dashboard-header {
+  @apply flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4;
+}
+
+.dashboard-title {
+  @apply flex-1 min-w-0;
+}
+
+.dashboard-actions {
+  @apply flex items-center gap-2 md:gap-3 flex-shrink-0;
+}
+
+/* Mobile specific improvements */
+@media (max-width: 640px) {
+  .admin-card {
+    @apply p-3;
+  }
+
+  .admin-card-icon {
+    @apply w-8 h-8;
+  }
+
+  .stat-number {
+    @apply text-xl;
+  }
+
+  .kpi-chart {
+    @apply p-3 min-h-[250px];
+  }
+
+  .chart-responsive {
+    @apply h-[200px];
+  }
+
+  .activity-item {
+    @apply p-2;
+  }
+
+  .performance-card {
+    @apply p-2;
+  }
+
+  .product-item {
+    @apply p-2;
+  }
+}
+
+/* Tablet specific improvements */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .dashboard-grid-4 {
+    @apply grid-cols-2;
+  }
+
+  .dashboard-grid-3 {
+    @apply grid-cols-2;
+  }
+}
+
+/* Large screen improvements */
+@media (min-width: 1025px) {
+  .content-area {
+    @apply p-8;
+  }
+
+  .dashboard-container {
+    @apply space-y-8;
+  }
+
+  .dashboard-grid {
+    @apply gap-8;
+  }
+}
+
+/* Prevent horizontal scroll on all screen sizes */
+html,
+body {
+  @apply overflow-x-hidden max-w-full;
+}
+
+* {
+  @apply max-w-full;
+}
+
+/* Chart specific overflow fixes */
+.recharts-wrapper {
+  @apply overflow-hidden;
+}
+
+.recharts-surface {
+  @apply overflow-visible;
 }
 
 /* Table responsive improvements */
 .responsive-table {
-  @apply w-full overflow-x-auto;
+  @apply w-full overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0;
 }
 
 .responsive-table table {
   @apply min-w-full;
 }
 
-/* Search improvements for Cyrillic/Latin */
-.search-enhanced {
-  @apply relative;
+/* Loading state improvements */
+.loading-card {
+  @apply admin-card animate-pulse;
 }
 
-/* Category tree improvements */
-.category-tree {
-  @apply space-y-1;
+.loading-content {
+  @apply space-y-3;
 }
 
-.category-item {
-  @apply flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors;
+.loading-bar {
+  @apply h-4 bg-muted rounded;
 }
 
-.category-indent {
-  @apply border-l-2 border-muted ml-4 pl-4;
+.loading-bar-sm {
+  @apply h-3 bg-muted rounded;
 }
 
-/* Product specifications */
-.spec-editor {
-  @apply space-y-4 p-4 border rounded-lg;
+/* Focus and accessibility improvements */
+.focusable {
+  @apply focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background;
 }
 
-.spec-item {
-  @apply flex items-center gap-2 p-2 bg-muted/30 rounded;
+/* High contrast mode improvements */
+@media (prefers-contrast: high) {
+  .admin-card {
+    @apply border-2 border-foreground/30;
+  }
+
+  .soft-button {
+    @apply border-2 border-foreground/30;
+  }
+
+  .permission-chip {
+    @apply border-2 border-primary;
+  }
 }
 
-/* Workers section */
-.worker-card {
-  @apply p-4 border rounded-lg hover:shadow-md transition-all;
-}
+/* Print optimizations */
+@media print {
+  .dashboard-container {
+    @apply space-y-4;
+  }
 
-.worker-avatar {
-  @apply w-16 h-16 rounded-full object-cover;
-}
+  .dashboard-grid {
+    @apply gap-4;
+  }
 
-/* Memory section */
-.storage-card {
-  @apply p-6 border rounded-lg;
-}
+  .admin-card {
+    @apply shadow-none border border-gray-300 break-inside-avoid;
+  }
 
-.storage-progress {
-  @apply w-full h-2 bg-muted rounded-full overflow-hidden;
-}
-
-.storage-bar {
-  @apply h-full bg-primary transition-all duration-300;
-}
-
-/* Enhanced soft pop design components */
-.soft-card {
-  @apply rounded-2xl border border-border/50 shadow-lg backdrop-blur-sm bg-card/95 hover:shadow-xl transition-all duration-300;
-}
-
-.soft-button {
-  @apply rounded-xl transition-all duration-200 active:scale-95 hover:shadow-md;
-}
-
-.glass-effect {
-  @apply backdrop-blur-xl bg-background/80 supports-[backdrop-filter]:bg-background/60 border border-border/50;
-}
-
-.gradient-bg {
-  background: linear-gradient(135deg, hsl(var(--background)) 0%, hsl(var(--muted)) 100%);
-}
-
-.admin-card {
-  @apply soft-card p-6 hover:scale-[1.02] transition-all duration-300;
-}
-
-.kpi-metric {
-  @apply soft-card p-4 text-center hover:shadow-lg transition-all duration-200;
+  .soft-button {
+    @apply hidden;
+  }
 }
 
 /* Profile and admin management styles */

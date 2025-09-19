@@ -344,13 +344,15 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="dashboard-container">
+        <div className="dashboard-grid dashboard-grid-4">
           {[...Array(8)].map((_, i) => (
-            <Card key={i} className="admin-card animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
-                <div className="h-8 bg-muted rounded w-1/2"></div>
+            <Card key={i} className="loading-card">
+              <CardContent className="p-4 md:p-6">
+                <div className="loading-content">
+                  <div className="loading-bar w-3/4"></div>
+                  <div className="loading-bar-sm w-1/2"></div>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -360,16 +362,15 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6 bg-background min-h-screen">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
-          <p className="text-muted-foreground">
+    <div className="dashboard-container">
+      <div className="dashboard-header">
+        <div className="dashboard-title">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Admin Dashboard</h1>
+          <p className="text-sm md:text-base text-muted-foreground mt-1">
             Xush kelibsiz, {user?.first_name} {user?.last_name}! Tizim holati va statistikasi
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="dashboard-actions">
           <Button
             variant="outline"
             size="sm"
@@ -378,169 +379,158 @@ export default function Dashboard() {
             className="soft-button bg-transparent"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-            Yangilash
+            <span className="hidden sm:inline">Yangilash</span>
           </Button>
           <BroadcastSMSDialog />
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="flex flex-wrap gap-3">
+      <div className="quick-action-buttons">
         <Button asChild className="soft-button">
           <Link href="/products">
             <Plus className="h-4 w-4 mr-2" />
-            Mahsulot qo'shish
+            <span className="hidden sm:inline">Mahsulot qo'shish</span>
+            <span className="sm:hidden">Mahsulot</span>
           </Link>
         </Button>
         <Button asChild variant="outline" className="soft-button bg-transparent">
           <Link href="/orders">
             <ShoppingCart className="h-4 w-4 mr-2" />
-            Buyurtmalarni ko'rish
+            <span className="hidden sm:inline">Buyurtmalarni ko'rish</span>
+            <span className="sm:hidden">Buyurtmalar</span>
           </Link>
         </Button>
         <Button asChild variant="outline" className="soft-button bg-transparent">
           <Link href="/admins">
             <Shield className="h-4 w-4 mr-2" />
-            Admin qo'shish
+            <span className="hidden sm:inline">Admin qo'shish</span>
+            <span className="sm:hidden">Admin</span>
           </Link>
         </Button>
         <Button asChild variant="outline" className="soft-button bg-transparent">
           <Link href="/kpi">
             <BarChart3 className="h-4 w-4 mr-2" />
-            KPI ko'rish
+            <span className="hidden sm:inline">KPI ko'rish</span>
+            <span className="sm:hidden">KPI</span>
           </Link>
         </Button>
       </div>
 
-      {/* Main Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="dashboard-grid dashboard-grid-4">
         <Card className="admin-card">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Jami mahsulotlar</p>
-                <p className="stat-number">{stats.totalProducts}</p>
-                <div className="flex items-center gap-1 mt-1">
-                  <ArrowUpRight className="h-3 w-3 text-green-600" />
-                  <span className="text-xs text-green-600">+12% bu oy</span>
-                </div>
+          <CardContent className="admin-card-content">
+            <div className="admin-card-text">
+              <p className="card-title">Jami mahsulotlar</p>
+              <p className="stat-number">{stats.totalProducts}</p>
+              <div className="flex items-center gap-1 mt-1">
+                <ArrowUpRight className="h-3 w-3 text-green-600 flex-shrink-0" />
+                <span className="card-description">+12% bu oy</span>
               </div>
-              <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
-                <Package className="h-6 w-6 text-primary-foreground" />
-              </div>
+            </div>
+            <div className="admin-card-icon bg-primary">
+              <Package className="h-5 w-5 md:h-6 md:w-6 text-primary-foreground" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="admin-card">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Buyurtmalar</p>
-                <p className="stat-number">{stats.totalOrders}</p>
-                <div className="flex items-center gap-1 mt-1">
-                  <Badge variant="secondary" className="text-xs">
-                    {stats.pendingOrders} kutilmoqda
-                  </Badge>
-                </div>
+          <CardContent className="admin-card-content">
+            <div className="admin-card-text">
+              <p className="card-title">Buyurtmalar</p>
+              <p className="stat-number">{stats.totalOrders}</p>
+              <div className="flex items-center gap-1 mt-1">
+                <Badge variant="secondary" className="text-xs">
+                  {stats.pendingOrders} kutilmoqda
+                </Badge>
               </div>
-              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
-                <ShoppingCart className="h-6 w-6 text-white" />
-              </div>
+            </div>
+            <div className="admin-card-icon bg-blue-500">
+              <ShoppingCart className="h-5 w-5 md:h-6 md:w-6 text-white" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="admin-card">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Foydalanuvchilar</p>
-                <p className="stat-number">{stats.totalUsers}</p>
-                <div className="flex items-center gap-1 mt-1">
-                  <ArrowUpRight className="h-3 w-3 text-green-600" />
-                  <span className="text-xs text-green-600">+8% bu oy</span>
-                </div>
+          <CardContent className="admin-card-content">
+            <div className="admin-card-text">
+              <p className="card-title">Foydalanuvchilar</p>
+              <p className="stat-number">{stats.totalUsers}</p>
+              <div className="flex items-center gap-1 mt-1">
+                <ArrowUpRight className="h-3 w-3 text-green-600 flex-shrink-0" />
+                <span className="card-description">+8% bu oy</span>
               </div>
-              <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
-                <Users className="h-6 w-6 text-white" />
-              </div>
+            </div>
+            <div className="admin-card-icon bg-green-500">
+              <Users className="h-5 w-5 md:h-6 md:w-6 text-white" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="admin-card">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Oylik daromad</p>
-                <p className="stat-number">{stats.monthlyRevenue.toLocaleString()} so'm</p>
-                <div className="flex items-center gap-1 mt-1">
-                  <ArrowUpRight className="h-3 w-3 text-green-600" />
-                  <span className="text-xs text-green-600">+15% o'tgan oyga nisbatan</span>
-                </div>
+          <CardContent className="admin-card-content">
+            <div className="admin-card-text">
+              <p className="card-title">Oylik daromad</p>
+              <p className="stat-number">{stats.monthlyRevenue.toLocaleString()}</p>
+              <div className="flex items-center gap-1 mt-1">
+                <ArrowUpRight className="h-3 w-3 text-green-600 flex-shrink-0" />
+                <span className="card-description">+15% o'tgan oyga nisbatan</span>
               </div>
-              <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-white" />
-              </div>
+            </div>
+            <div className="admin-card-icon bg-purple-500">
+              <DollarSign className="h-5 w-5 md:h-6 md:w-6 text-white" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Admin Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="dashboard-grid dashboard-grid-3">
         <Card className="admin-card">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Jami adminlar</p>
-                <p className="text-2xl font-bold text-foreground">{stats.totalAdmins}</p>
-              </div>
-              <Shield className="h-8 w-8 text-primary" />
+          <CardContent className="admin-card-content">
+            <div className="admin-card-text">
+              <p className="card-title">Jami adminlar</p>
+              <p className="text-xl md:text-2xl font-bold text-foreground">{stats.totalAdmins}</p>
+            </div>
+            <div className="admin-card-icon bg-primary/10">
+              <Shield className="h-6 w-6 md:h-8 md:w-8 text-primary" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="admin-card">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Faol adminlar</p>
-                <p className="text-2xl font-bold text-green-600">{stats.activeAdmins}</p>
-              </div>
-              <Activity className="h-8 w-8 text-green-600" />
+          <CardContent className="admin-card-content">
+            <div className="admin-card-text">
+              <p className="card-title">Faol adminlar</p>
+              <p className="text-xl md:text-2xl font-bold text-green-600">{stats.activeAdmins}</p>
+            </div>
+            <div className="admin-card-icon bg-green-100 dark:bg-green-900/20">
+              <Activity className="h-6 w-6 md:h-8 md:w-8 text-green-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="admin-card">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Tizim holati</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span className="text-sm text-green-600">Barcha tizimlar ishlayapti</span>
-                </div>
+          <CardContent className="admin-card-content">
+            <div className="admin-card-text">
+              <p className="card-title">Tizim holati</p>
+              <div className="flex items-center gap-2 mt-1">
+                <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+                <span className="text-sm text-green-600">Barcha tizimlar ishlayapti</span>
               </div>
-              <div className="w-8 h-8 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-              </div>
+            </div>
+            <div className="admin-card-icon bg-green-100 dark:bg-green-900/20">
+              <CheckCircle className="h-5 w-5 text-green-600" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Charts and Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Orders by Month */}
+      <div className="dashboard-grid dashboard-grid-2">
         <Card className="kpi-chart">
-          <CardHeader>
+          <CardHeader className="pb-4">
             <CardTitle className="text-foreground">Oylik buyurtmalar va daromad</CardTitle>
             <CardDescription>So'nggi 6 oy davomidagi statistika</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <ChartContainer
               config={{
                 orders: {
@@ -552,10 +542,10 @@ export default function Dashboard() {
                   color: "hsl(var(--secondary))",
                 },
               }}
-              className="h-[300px]"
+              className="chart-responsive"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stats.ordersByMonth}>
+                <AreaChart data={stats.ordersByMonth} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
@@ -582,13 +572,12 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Products by Category */}
         <Card className="kpi-chart">
-          <CardHeader>
+          <CardHeader className="pb-4">
             <CardTitle className="text-foreground">Kategoriyalar bo'yicha mahsulotlar</CardTitle>
             <CardDescription>Har bir kategoriyada nechta mahsulot bor</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <ChartContainer
               config={{
                 count: {
@@ -596,10 +585,10 @@ export default function Dashboard() {
                   color: "hsl(var(--primary))",
                 },
               }}
-              className="h-[300px]"
+              className="chart-responsive"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                <PieChart margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
                   <Pie
                     data={stats.productsByCategory}
                     cx="50%"
@@ -622,29 +611,27 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Bottom Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activity */}
+      <div className="dashboard-grid dashboard-grid-2">
         <Card className="soft-card">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5" />
+              <Activity className="h-5 w-5 flex-shrink-0" />
               So'nggi faollik
             </CardTitle>
             <CardDescription>Admin harakatlari va tizim hodisalari</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {stats.recentActivity.slice(0, 8).map((activity) => (
-                <div key={activity.id} className="flex items-center gap-3 p-3 bg-accent/30 rounded-xl">
-                  <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                <div key={activity.id} className="activity-item">
+                  <div className="activity-icon">
                     <Activity className="h-4 w-4 text-primary-foreground" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
+                  <div className="activity-content">
+                    <p className="activity-title">
                       {activity.admin_name || "Noma'lum admin"} - {getActionDisplayName(activity.action_type)}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="activity-subtitle">
                       {getModuleDisplayName(activity.module)} • {new Date(activity.created_at).toLocaleString("uz-UZ")}
                     </p>
                   </div>
@@ -657,29 +644,26 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Top Products */}
         <Card className="soft-card">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Star className="h-5 w-5" />
+              <Star className="h-5 w-5 flex-shrink-0" />
               Eng mashhur mahsulotlar
             </CardTitle>
             <CardDescription>Ko'rishlar soni bo'yicha top 5 mahsulot</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {stats.topProducts.map((product, index) => (
-                <div key={index} className="flex items-center justify-between p-4 bg-accent/30 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-sm">
-                      {index + 1}
-                    </div>
-                    <div>
-                      <p className="font-medium">{product.name}</p>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Eye className="h-4 w-4" />
+                <div key={index} className="product-item">
+                  <div className="product-info">
+                    <div className="product-rank">{index + 1}</div>
+                    <div className="product-details">
+                      <p className="product-name">{product.name}</p>
+                      <div className="product-stats">
+                        <Eye className="h-4 w-4 flex-shrink-0" />
                         <span>{product.views} ko'rishlar</span>
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 flex-shrink-0" />
                         <span>{product.rating.toFixed(1)}</span>
                       </div>
                     </div>
@@ -691,26 +675,23 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Admin Performance */}
       {stats.adminPerformance.length > 0 && (
         <Card className="soft-card">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
+              <TrendingUp className="h-5 w-5 flex-shrink-0" />
               Eng faol adminlar (bu hafta)
             </CardTitle>
             <CardDescription>Haftalik faollik bo'yicha eng ko'p harakat qilgan adminlar</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="dashboard-grid dashboard-grid-3">
               {stats.adminPerformance.map((admin, index) => (
-                <div key={index} className="flex items-center gap-3 p-4 bg-accent/30 rounded-xl">
-                  <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-sm">
-                    {index + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{admin.admin_name || "Noma'lum admin"}</p>
-                    <p className="text-sm text-muted-foreground">{admin.actions_count} harakat</p>
+                <div key={index} className="performance-card">
+                  <div className="performance-rank">{index + 1}</div>
+                  <div className="performance-content">
+                    <p className="performance-name">{admin.admin_name || "Noma'lum admin"}</p>
+                    <p className="performance-stats">{admin.actions_count} harakat</p>
                   </div>
                   <Badge variant="outline" className="permission-chip">
                     <Activity className="h-3 w-3 mr-1" />
