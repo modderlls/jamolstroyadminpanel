@@ -90,6 +90,10 @@
   .soft-card {
     @apply rounded-xl border border-border/50 bg-card/80 shadow-sm;
   }
+  /* Background gradient utility for full-screen auth/login pages */
+  .gradient-bg {
+    @apply bg-gradient-to-br from-primary to-primary/70;
+  }
 }
 
 /* iOS-style components */
