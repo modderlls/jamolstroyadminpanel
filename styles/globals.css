@@ -79,6 +79,12 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
+@layer components {
+  .soft-card {
+    @apply bg-white rounded-lg shadow-md;
+  }
+}
+
 
 @layer base {
   * {
