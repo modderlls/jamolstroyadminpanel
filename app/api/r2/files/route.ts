@@ -1,14 +1,14 @@
+// /api/r2/files/route.ts
 import { NextResponse } from "next/server"
 import { ListObjectsV2Command } from "@aws-sdk/client-s3"
 import { r2Client, R2_BUCKET_NAME, R2_PUBLIC_URL } from "@/lib/r2-client"
 import { withPermission } from "@/lib/api-middleware"
 
+export const dynamic = "force-dynamic"  // <<< Shu qator qo'shiladi
+
 export const GET = withPermission("files", "read", async () => {
   try {
-    const command = new ListObjectsV2Command({
-      Bucket: R2_BUCKET_NAME,
-    })
-
+    const command = new ListObjectsV2Command({ Bucket: R2_BUCKET_NAME })
     const response = await r2Client.send(command)
 
     const files = (response.Contents || []).map((object) => ({
@@ -21,19 +21,9 @@ export const GET = withPermission("files", "read", async () => {
       url: `${R2_PUBLIC_URL}/${object.Key}`,
     }))
 
-    return NextResponse.json({
-      success: true,
-      files,
-      count: files.length,
-    })
+    return NextResponse.json({ success: true, files, count: files.length })
   } catch (error) {
     console.error("Error listing R2 files:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to list files from R2",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ success: false, error: "Failed to list files from R2" }, { status: 500 })
   }
 })
