@@ -1,12 +1,12 @@
 import { createBrowserClient, createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
 
 export const createClient = () => {
   return createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 }
 
 // Server-side client for API routes and server components
-export const createServerSupabaseClient = () => {
+export const createServerSupabaseClient = async () => {
+  const { cookies } = await import("next/headers")
   const cookieStore = cookies()
 
   return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
