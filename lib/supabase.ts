@@ -1,28 +1,23 @@
-import { createBrowserClient, createServerClient } from "@supabase/ssr"
+import { createClient } from "@supabase/supabase-js"
 
-export const createClient = () => {
-  return createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-}
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// Server-side client for API routes and server components
-export const createServerSupabaseClient = async () => {
-  const { cookies } = await import("next/headers")
-  const cookieStore = cookies()
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value
-      },
-      set(name: string, value: string, options: any) {
-        cookieStore.set({ name, value, ...options })
-      },
-      remove(name: string, options: any) {
-        cookieStore.set({ name, value: "", ...options })
-      },
+// Server-side client
+export const createServerClient = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+  if (!url || !serviceKey) {
+    throw new Error("Missing Supabase environment variables")
+  }
+
+  return createClient(url, serviceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
     },
   })
 }
-
-// Legacy client for backward compatibility
-export const supabase = createClient()

@@ -1,27 +1,23 @@
-import { createClient } from "./supabase"
+import { createBrowserClient } from "@supabase/ssr"
 
-const supabase = createClient()
+const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 export interface Permission {
-  module: string
-  action: string
-  display_name: string
-  description?: string
+  resource: string
+  actions: string[]
 }
 
 export interface AdminRole {
   id: string
-  name: string
+  role_name: string
   display_name: string
-  description?: string
-  permissions: string[]
+  permissions: Permission[]
 }
 
 export class PermissionManager {
   private static instance: PermissionManager
   private userRole: string | null = null
-  private userPermissions: string[] = []
-  private adminRoleId: string | null = null
+  private userPermissions: Permission[] = []
 
   private constructor() {}
 
@@ -34,29 +30,29 @@ export class PermissionManager {
 
   async initialize(userId: string) {
     try {
-      const { data: user } = await supabase
-        .from("users")
-        .select(`
-          role,
-          admin_role_id,
-          admin_roles (
-            name,
-            permissions
-          )
-        `)
-        .eq("id", userId)
-        .single()
+      // Get user role
+      const { data: user } = await supabase.from("users").select("role").eq("id", userId).single()
 
       if (user) {
         this.userRole = user.role
-        this.adminRoleId = user.admin_role_id
 
+        // If main admin, grant all permissions
         if (user.role === "admin") {
-          if (user.admin_roles?.name === "super_admin" || user.admin_roles?.permissions?.includes("*")) {
-            this.userPermissions = ["*"]
-          } else {
-            this.userPermissions = user.admin_roles?.permissions || []
-          }
+          this.userPermissions = this.getAllPermissions()
+        } else {
+          // Get specific permissions for the role
+          const { data: permissions } = await supabase
+            .from("admin_roles")
+            .select(`
+              admin_permissions (
+                resource,
+                actions
+              )
+            `)
+            .eq("role_name", user.role)
+            .single()
+
+          this.userPermissions = permissions?.admin_permissions || []
         }
       }
     } catch (error) {
@@ -64,62 +60,74 @@ export class PermissionManager {
     }
   }
 
-  hasPermission(module: string, action: string): boolean {
-    if (this.userPermissions.includes("*")) {
+  private getAllPermissions(): Permission[] {
+    return [
+      { resource: "products", actions: ["view", "create", "update", "delete"] },
+      { resource: "categories", actions: ["view", "create", "update", "delete"] },
+      { resource: "orders", actions: ["view", "create", "update", "delete", "approve", "mark_paid", "mark_debt"] },
+      { resource: "debts", actions: ["view", "create", "update", "delete", "mark_paid"] },
+      { resource: "statistics", actions: ["view", "export"] },
+      { resource: "sms", actions: ["view", "send", "statistics"] },
+      { resource: "workers", actions: ["view", "create", "update", "delete"] },
+      { resource: "ads", actions: ["view", "create", "update", "delete"] },
+      { resource: "admins", actions: ["view", "create", "update", "delete"] },
+      { resource: "kpi", actions: ["view", "view_all"] },
+      { resource: "notifications", actions: ["view", "send", "realtime"] },
+    ]
+  }
+
+  hasPermission(resource: string, action: string): boolean {
+    // Main admin has all permissions
+    if (this.userRole === "admin") {
       return true
     }
 
-    const requiredPermission = `${module}:${action}`
-    const moduleWildcard = `${module}:*`
-
-    return this.userPermissions.includes(requiredPermission) || this.userPermissions.includes(moduleWildcard)
+    // Check specific permission
+    const permission = this.userPermissions.find((p) => p.resource === resource)
+    return permission ? permission.actions.includes(action) : false
   }
 
-  canAccess(module: string): boolean {
-    return this.hasPermission(module, "view")
+  canAccess(resource: string): boolean {
+    return this.hasPermission(resource, "view")
   }
 
-  canCreate(module: string): boolean {
-    return this.hasPermission(module, "create")
+  canCreate(resource: string): boolean {
+    return this.hasPermission(resource, "create")
   }
 
-  canUpdate(module: string): boolean {
-    return this.hasPermission(module, "edit")
+  canUpdate(resource: string): boolean {
+    return this.hasPermission(resource, "update")
   }
 
-  canDelete(module: string): boolean {
-    return this.hasPermission(module, "delete")
+  canDelete(resource: string): boolean {
+    return this.hasPermission(resource, "delete")
   }
 
   isMainAdmin(): boolean {
-    return this.userRole === "admin" && this.userPermissions.includes("*")
+    return this.userRole === "admin"
   }
 
   getUserRole(): string | null {
     return this.userRole
   }
 
-  getUserPermissions(): string[] {
+  getUserPermissions(): Permission[] {
     return this.userPermissions
-  }
-
-  getAdminRoleId(): string | null {
-    return this.adminRoleId
   }
 }
 
+// Hook for using permissions in components
 export function usePermissions() {
   const permissionManager = PermissionManager.getInstance()
 
   return {
-    hasPermission: (module: string, action: string) => permissionManager.hasPermission(module, action),
-    canAccess: (module: string) => permissionManager.canAccess(module),
-    canCreate: (module: string) => permissionManager.canCreate(module),
-    canUpdate: (module: string) => permissionManager.canUpdate(module),
-    canDelete: (module: string) => permissionManager.canDelete(module),
+    hasPermission: (resource: string, action: string) => permissionManager.hasPermission(resource, action),
+    canAccess: (resource: string) => permissionManager.canAccess(resource),
+    canCreate: (resource: string) => permissionManager.canCreate(resource),
+    canUpdate: (resource: string) => permissionManager.canUpdate(resource),
+    canDelete: (resource: string) => permissionManager.canDelete(resource),
     isMainAdmin: () => permissionManager.isMainAdmin(),
     getUserRole: () => permissionManager.getUserRole(),
     getUserPermissions: () => permissionManager.getUserPermissions(),
-    getAdminRoleId: () => permissionManager.getAdminRoleId(),
   }
 }

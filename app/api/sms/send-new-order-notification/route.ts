@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { smsService } from "@/lib/sms-service"
-import { withPermission } from "@/lib/api-middleware"
 
-export const POST = withPermission("orders", "create", async (request: NextRequest) => {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { orderNumber, customerName, customerPhone, address, orderDetails } = body
@@ -34,4 +33,4 @@ export const POST = withPermission("orders", "create", async (request: NextReque
     console.error("[v0] Error sending new order notification:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-})
+}

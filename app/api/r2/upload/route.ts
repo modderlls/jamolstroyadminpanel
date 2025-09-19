@@ -1,27 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { r2Client, R2_BUCKET_NAME, R2_PUBLIC_URL } from "@/lib/r2-client"
-import { withAuth } from "@/lib/api-middleware"
 
-export const POST = withAuth(async (request: NextRequest, user: any) => {
+export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
     const file = formData.get("file") as File
 
     if (!file) {
       return NextResponse.json({ success: false, error: "No file provided" }, { status: 400 })
-    }
-
-    // Validate file size (max 10MB)
-    const maxSize = 10 * 1024 * 1024 // 10MB
-    if (file.size > maxSize) {
-      return NextResponse.json({ success: false, error: "File too large (max 10MB)" }, { status: 400 })
-    }
-
-    // Validate file type
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "text/plain"]
-    if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json({ success: false, error: "File type not allowed" }, { status: 400 })
     }
 
     // Generate unique filename
@@ -68,4 +55,4 @@ export const POST = withAuth(async (request: NextRequest, user: any) => {
       { status: 500 },
     )
   }
-})
+}

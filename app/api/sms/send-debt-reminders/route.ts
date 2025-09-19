@@ -1,9 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 import { smsService } from "@/lib/sms-service"
-import { withPermission } from "@/lib/api-middleware"
 
-export const POST = withPermission("sms", "send", async (request: NextRequest) => {
+export async function POST(request: NextRequest) {
   try {
     // Get all current debtors
     const { data: debtors, error } = await supabase
@@ -64,4 +63,4 @@ export const POST = withPermission("sms", "send", async (request: NextRequest) =
     console.error("[v0] Error sending debt reminders:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-})
+}

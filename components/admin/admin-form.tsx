@@ -163,16 +163,13 @@ export function AdminForm({ admin, onSave, onCancel }: AdminFormProps) {
         }
       } else {
         // Create new admin
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
           email: formData.email,
           password: formData.password,
+          email_confirm: true,
         })
 
         if (authError) throw authError
-
-        if (!authData.user) {
-          throw new Error("Failed to create user")
-        }
 
         const { error: userError } = await supabase.from("users").insert({
           id: authData.user.id,

@@ -1,10 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { withPermission } from "@/lib/api-middleware"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-export const POST = withPermission("orders", "edit", async (request: NextRequest, user: any) => {
+export async function POST(request: NextRequest) {
   try {
     const { orderId } = await request.json()
 
@@ -86,14 +85,6 @@ export const POST = withPermission("orders", "edit", async (request: NextRequest
       }
     }
 
-    // Log admin action
-    await supabase.rpc("log_admin_action", {
-      p_action_type: "order_variations_process",
-      p_module: "orders",
-      p_entity_id: orderId,
-      p_metadata: { updatedProducts, admin_id: user.id },
-    })
-
     return NextResponse.json({
       message: "Manual variations processed successfully",
       updatedProducts,
@@ -102,4 +93,4 @@ export const POST = withPermission("orders", "edit", async (request: NextRequest
     console.error("Error processing manual variations:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-})
+}
