@@ -7,6 +7,10 @@
     text-wrap: balance;
   }
 }
+.admin-card {
+  @apply bg-white rounded-lg shadow-md p-4 md:p-6 hover:scale-[1.01] transition-all duration-300 min-w-0 overflow-hidden;
+}
+
 
 @layer base {
   :root {
