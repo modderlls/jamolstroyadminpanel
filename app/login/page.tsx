@@ -258,9 +258,9 @@ export default function AdminLoginPage() {
   // Show loading while checking auth
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="login-container">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-foreground" />
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
           <p className="text-muted-foreground">Yuklanmoqda...</p>
         </div>
       </div>
@@ -270,9 +270,9 @@ export default function AdminLoginPage() {
   // Don't render login form if user is already logged in
   if (user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="login-container">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-foreground" />
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
           <p className="text-muted-foreground">Yo'naltirilmoqda...</p>
         </div>
       </div>
@@ -280,11 +280,11 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md ios-card">
+    <div className="login-container">
+      <Card className="login-card animate-fade-in-up">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-2xl flex items-center justify-center">
-            <Shield className="h-8 w-8 text-primary-foreground" />
+          <div className="auth-logo">
+            <Shield className="h-8 w-8 text-white" />
           </div>
           <CardTitle className="text-2xl text-foreground">JamolStroy Admin</CardTitle>
           <CardDescription>

@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Lock, Shield, Key, Trash2, Edit, Loader2 } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Lock, Shield, Key, Trash2, Edit, Loader2, Briefcase, Megaphone, SettingsIcon } from "lucide-react"
+import Link from "next/link"
 
 export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("")
@@ -287,187 +289,311 @@ export default function SettingsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Sozlamalar</h1>
-          <p className="text-muted-foreground">Admin panel sozlamalari</p>
+          <p className="text-muted-foreground">Admin panel sozlamalari va boshqaruv</p>
         </div>
       </div>
 
-      <div className="max-w-2xl space-y-6">
-        {/* MD Password Management */}
-        <Card className="ios-card">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5" />
-                  MD Parol Boshqaruvi
-                </CardTitle>
-                <CardDescription>Qarzdorlarni to'langan deb belgilash uchun maxsus parol</CardDescription>
-              </div>
-              <Badge variant={hasPassword ? "default" : "secondary"}>{hasPassword ? "Faol" : "O'rnatilmagan"}</Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-200 text-sm">
-                {error}
-              </div>
-            )}
+      <Tabs defaultValue="security" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="security" className="flex items-center gap-2">
+            <Shield className="h-4 w-4" />
+            Xavfsizlik
+          </TabsTrigger>
+          <TabsTrigger value="modules" className="flex items-center gap-2">
+            <SettingsIcon className="h-4 w-4" />
+            Modullar
+          </TabsTrigger>
+          <TabsTrigger value="system" className="flex items-center gap-2">
+            <Lock className="h-4 w-4" />
+            Tizim
+          </TabsTrigger>
+        </TabsList>
 
-            {success && (
-              <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-200 text-sm">
-                {success}
-              </div>
-            )}
-
-            {!hasPassword ? (
-              // Create Password
-              <div className="space-y-4">
-                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200 mb-2">
-                    <Key className="h-4 w-4" />
-                    <span className="font-medium">Yangi MD parol yaratish</span>
+        <TabsContent value="security" className="space-y-6">
+          <div className="max-w-2xl space-y-6">
+            {/* MD Password Management */}
+            <Card className="ios-card">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Shield className="h-5 w-5" />
+                      MD Parol Boshqaruvi
+                    </CardTitle>
+                    <CardDescription>Qarzdorlarni to'langan deb belgilash uchun maxsus parol</CardDescription>
                   </div>
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    MD parol faqat raqamlardan iborat bo'lishi kerak va kamida 4 ta raqam bo'lishi kerak.
-                  </p>
+                  <Badge variant={hasPassword ? "default" : "secondary"}>
+                    {hasPassword ? "Faol" : "O'rnatilmagan"}
+                  </Badge>
                 </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password">Yangi parol (faqat raqamlar)</Label>
-                    <Input
-                      id="new-password"
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="1234"
-                      pattern="[0-9]*"
-                    />
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {error && (
+                  <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-200 text-sm">
+                    {error}
                   </div>
+                )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Parolni tasdiqlang</Label>
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="1234"
-                      pattern="[0-9]*"
-                    />
+                {success && (
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-200 text-sm">
+                    {success}
                   </div>
+                )}
 
-                  <Button
-                    onClick={handleCreatePassword}
-                    disabled={loading || !newPassword || !confirmPassword}
-                    className="w-full ios-button"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Yaratilmoqda...
-                      </>
-                    ) : (
-                      "MD Parol Yaratish"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              // Update/Delete Password
-              <div className="space-y-4">
-                <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                  <div className="flex items-center gap-2 text-green-800 dark:text-green-200 mb-2">
-                    <Lock className="h-4 w-4" />
-                    <span className="font-medium">MD parol faol</span>
-                  </div>
-                  <p className="text-sm text-green-700 dark:text-green-300">
-                    MD parol o'rnatilgan va qarzdorlarni boshqarishda ishlatilmoqda.
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="current-password">Joriy parol</Label>
-                    <Input
-                      id="current-password"
-                      type="password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      placeholder="Joriy parolni kiriting"
-                      pattern="[0-9]*"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="new-password-update">Yangi parol</Label>
-                      <Input
-                        id="new-password-update"
-                        type="password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="Yangi parol"
-                        pattern="[0-9]*"
-                      />
+                {!hasPassword ? (
+                  // Create Password
+                  <div className="space-y-4">
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200 mb-2">
+                        <Key className="h-4 w-4" />
+                        <span className="font-medium">Yangi MD parol yaratish</span>
+                      </div>
+                      <p className="text-sm text-blue-700 dark:text-blue-300">
+                        MD parol faqat raqamlardan iborat bo'lishi kerak va kamida 4 ta raqam bo'lishi kerak.
+                      </p>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="confirm-password-update">Parolni tasdiqlang</Label>
-                      <Input
-                        id="confirm-password-update"
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Parolni tasdiqlang"
-                        pattern="[0-9]*"
-                      />
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="new-password">Yangi parol (faqat raqamlar)</Label>
+                        <Input
+                          id="new-password"
+                          type="password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="1234"
+                          pattern="[0-9]*"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="confirm-password">Parolni tasdiqlang</Label>
+                        <Input
+                          id="confirm-password"
+                          type="password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="1234"
+                          pattern="[0-9]*"
+                        />
+                      </div>
+
+                      <Button
+                        onClick={handleCreatePassword}
+                        disabled={loading || !newPassword || !confirmPassword}
+                        className="w-full ios-button"
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Yaratilmoqda...
+                          </>
+                        ) : (
+                          "MD Parol Yaratish"
+                        )}
+                      </Button>
                     </div>
                   </div>
+                ) : (
+                  // Update/Delete Password
+                  <div className="space-y-4">
+                    <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                      <div className="flex items-center gap-2 text-green-800 dark:text-green-200 mb-2">
+                        <Lock className="h-4 w-4" />
+                        <span className="font-medium">MD parol faol</span>
+                      </div>
+                      <p className="text-sm text-green-700 dark:text-green-300">
+                        MD parol o'rnatilgan va qarzdorlarni boshqarishda ishlatilmoqda.
+                      </p>
+                    </div>
 
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={handleUpdatePassword}
-                      disabled={loading || !currentPassword || !newPassword || !confirmPassword}
-                      className="flex-1 ios-button"
-                    >
-                      <Edit className="h-4 w-4 mr-2" />
-                      {loading ? "Yangilanmoqda..." : "Parolni Yangilash"}
-                    </Button>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="current-password">Joriy parol</Label>
+                        <Input
+                          id="current-password"
+                          type="password"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          placeholder="Joriy parolni kiriting"
+                          pattern="[0-9]*"
+                        />
+                      </div>
 
-                    <Button
-                      onClick={handleDeletePassword}
-                      disabled={loading || !currentPassword}
-                      variant="destructive"
-                      className="ios-button"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      {loading ? "O'chirilmoqda..." : "O'chirish"}
-                    </Button>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="new-password-update">Yangi parol</Label>
+                          <Input
+                            id="new-password-update"
+                            type="password"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="Yangi parol"
+                            pattern="[0-9]*"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="confirm-password-update">Parolni tasdiqlang</Label>
+                          <Input
+                            id="confirm-password-update"
+                            type="password"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="Parolni tasdiqlang"
+                            pattern="[0-9]*"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleUpdatePassword}
+                          disabled={loading || !currentPassword || !newPassword || !confirmPassword}
+                          className="flex-1 ios-button"
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          {loading ? "Yangilanmoqda..." : "Parolni Yangilash"}
+                        </Button>
+
+                        <Button
+                          onClick={handleDeletePassword}
+                          disabled={loading || !currentPassword}
+                          variant="destructive"
+                          className="ios-button"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          {loading ? "O'chirilmoqda..." : "O'chirish"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Security Info */}
+            <Card className="ios-card border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 text-orange-800 dark:text-orange-200 mb-3">
+                  <Shield className="h-4 w-4" />
+                  <span className="font-medium">Xavfsizlik eslatmasi</span>
+                </div>
+                <ul className="text-sm text-orange-700 dark:text-orange-300 space-y-1">
+                  <li>• MD parol faqat qarzdorlarni to'langan deb belgilashda ishlatiladi</li>
+                  <li>• Parolni boshqalar bilan baham ko'rmang</li>
+                  <li>• Parolni xavfsiz joyda saqlang</li>
+                  <li>• Parolni muntazam ravishda yangilang</li>
+                  <li>• Bu sahifaga kirish uchun MD parol talab qilinadi</li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="modules" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Workers Module */}
+            <Card className="ios-card hover:shadow-lg transition-all duration-200">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                    <Briefcase className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Ustalar</CardTitle>
+                    <CardDescription>Ishchilar va ustalarni boshqarish</CardDescription>
                   </div>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Qurilish ustalarini qo'shish, tahrirlash va ularning ma'lumotlarini boshqarish.
+                </p>
+                <Button asChild className="w-full">
+                  <Link href="/workers">
+                    <Briefcase className="h-4 w-4 mr-2" />
+                    Ustalarni Boshqarish
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
 
-        {/* Security Info */}
-        <Card className="ios-card border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-orange-800 dark:text-orange-200 mb-3">
-              <Shield className="h-4 w-4" />
-              <span className="font-medium">Xavfsizlik eslatmasi</span>
-            </div>
-            <ul className="text-sm text-orange-700 dark:text-orange-300 space-y-1">
-              <li>• MD parol faqat qarzdorlarni to'langan deb belgilashda ishlatiladi</li>
-              <li>• Parolni boshqalar bilan baham ko'rmang</li>
-              <li>• Parolni xavfsiz joyda saqlang</li>
-              <li>• Parolni muntazam ravishda yangilang</li>
-              <li>• Bu sahifaga kirish uchun MD parol talab qilinadi</li>
-            </ul>
-          </CardContent>
-        </Card>
-      </div>
+            {/* Ads Module */}
+            <Card className="ios-card hover:shadow-lg transition-all duration-200">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center">
+                    <Megaphone className="h-6 w-6 text-green-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Reklamalar</CardTitle>
+                    <CardDescription>Reklama va e'lonlarni boshqarish</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Reklama bannerlarini qo'shish, tahrirlash va faollashtirish.
+                </p>
+                <Button asChild className="w-full">
+                  <Link href="/ads">
+                    <Megaphone className="h-4 w-4 mr-2" />
+                    Reklamalarni Boshqarish
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Module Info */}
+          <Card className="ios-card border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200 mb-3">
+                <SettingsIcon className="h-4 w-4" />
+                <span className="font-medium">Modullar haqida</span>
+              </div>
+              <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                <li>• Ustalar moduli orqali qurilish ishchilarini boshqaring</li>
+                <li>• Reklamalar moduli orqali marketing kampaniyalarini nazorat qiling</li>
+                <li>• Har bir modul alohida ruxsatlar bilan himoyalangan</li>
+                <li>• Modullar asosiy menyudan olib tashlangan va sozlamalarga joylashtirilgan</li>
+              </ul>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="system" className="space-y-6">
+          <div className="max-w-2xl">
+            <Card className="ios-card">
+              <CardHeader>
+                <CardTitle>Tizim Ma'lumotlari</CardTitle>
+                <CardDescription>Admin panel tizimi haqida umumiy ma'lumotlar</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium">Versiya</Label>
+                    <p className="text-sm text-muted-foreground">v2.0.0</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Oxirgi yangilanish</Label>
+                    <p className="text-sm text-muted-foreground">2024-12-19</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Tizim holati</Label>
+                    <Badge variant="success">Faol</Badge>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Xavfsizlik darajasi</Label>
+                    <Badge variant="default">Yuqori</Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

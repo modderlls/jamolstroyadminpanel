@@ -4,6 +4,7 @@ import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import type { Session } from "@supabase/supabase-js"
+import { kpiLogger } from "@/lib/kpi-logger"
 
 interface User {
   id: string
@@ -63,6 +64,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Store in localStorage as backup
             localStorage.setItem("jamolstroy_admin", JSON.stringify(userData))
             localStorage.setItem("jamolstroy_session", JSON.stringify(initialSession))
+
+            await kpiLogger.logLogin()
+
+            // Update last login time
+            await supabase.from("users").update({ last_login_at: new Date().toISOString() }).eq("id", userData.id)
           } else {
             // Not admin or error, clear session
             await supabase.auth.signOut()
@@ -118,6 +124,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Store in localStorage
             localStorage.setItem("jamolstroy_admin", JSON.stringify(userData))
             localStorage.setItem("jamolstroy_session", JSON.stringify(session))
+
+            await kpiLogger.logLogin()
+
+            // Update last login time
+            await supabase.from("users").update({ last_login_at: new Date().toISOString() }).eq("id", userData.id)
           } else {
             // Not admin, sign out
             await supabase.auth.signOut()
@@ -138,12 +149,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  const setUserData = (userData: User, sessionData: Session) => {
+  const setUserData = async (userData: User, sessionData: Session) => {
     setUser(userData)
     setSession(sessionData)
     document.cookie = `jamolstroy_admin_token=${userData.id}; path=/; max-age=${7 * 24 * 60 * 60}`
     localStorage.setItem("jamolstroy_admin", JSON.stringify(userData))
     localStorage.setItem("jamolstroy_session", JSON.stringify(sessionData))
+
+    await kpiLogger.logLogin()
+
+    // Update last login time
+    await supabase.from("users").update({ last_login_at: new Date().toISOString() }).eq("id", userData.id)
   }
 
   const logout = async () => {

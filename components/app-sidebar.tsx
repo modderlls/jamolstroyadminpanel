@@ -10,9 +10,8 @@ import {
   Users,
   Settings,
   FolderTree,
-  Calendar,
-  Briefcase,
-  Megaphone,
+  Shield,
+  Activity,
   HardDrive,
 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
@@ -20,6 +19,7 @@ import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import { useKPITracker } from "@/hooks/use-kpi-tracker"
 
 import {
   Sidebar,
@@ -44,6 +44,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0)
   const [debtorsCount, setDebtorsCount] = useState(0)
   const [rentalsCount, setRentalsCount] = useState(0)
+
+  useKPITracker()
 
   useEffect(() => {
     fetchCounts()
@@ -111,7 +113,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         icon: ShoppingCart,
         badge: pendingOrdersCount > 0 ? pendingOrdersCount : null,
       },
-      
       {
         title: "Qarzdorlar",
         url: "/debtors",
@@ -124,14 +125,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         icon: FolderTree,
       },
       {
-        title: "Ustalar",
-        url: "/workers",
-        icon: Briefcase,
+        title: "Adminlar",
+        url: "/admins",
+        icon: Shield,
       },
       {
-        title: "Reklamalar",
-        url: "/ads",
-        icon: Megaphone,
+        title: "KPI Tizimi",
+        url: "/kpi",
+        icon: Activity,
       },
       {
         title: "Xotira",
